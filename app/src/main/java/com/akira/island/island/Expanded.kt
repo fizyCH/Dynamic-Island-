@@ -134,7 +134,7 @@ fun ExpandedContent(act: Act, s: IslandSettings, lyrics: Lyrics?, battery: Batte
             is Act.TimerA -> TimerExpanded(act.t, s)
             is Act.StopwatchA -> StopwatchExpanded(act.w)
             is Act.TorchA -> Unit
-            is Act.ChronoA -> ChronoExpanded(act.c, s)
+            is Act.ChronoA -> ChronoExpanded(act.c)
             is Act.ProgressA -> ProgressExpanded(act.p)
             is Act.ChargingA -> ChargingExpanded(act.b)
             is Act.HotspotA -> HotspotExpanded(act.h)
@@ -514,16 +514,12 @@ private fun TorchCard(t: TorchState, s: IslandSettings) {
 
 /** Таймер или секундомер из Часов, звонок по VoIP и запись экрана или звука — запись красной волной и кнопкой «стоп». */
 @Composable
-private fun ChronoExpanded(c: ChronoInfo, s: IslandSettings) {
+private fun ChronoExpanded(c: ChronoInfo) {
     val context = LocalContext.current
     val now = rememberWallNow(500)
     if (c.isRecording) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (c.isScreenRecording) {
-                RecordingDot(Tints.Red, !s.reduceEffects, Modifier.size(24.dp))
-            } else {
-                Icon(Icons.Rounded.Mic, null, tint = Tints.Red, modifier = Modifier.size(26.dp))
-            }
+            Icon(Icons.Rounded.Mic, null, tint = Tints.Red, modifier = Modifier.size(26.dp))
             Spacer(Modifier.width(12.dp))
             Text(formatDuration(c.elapsed(now)), color = Tints.Red, fontSize = 22.sp, style = Digits)
             Spacer(Modifier.weight(1f))

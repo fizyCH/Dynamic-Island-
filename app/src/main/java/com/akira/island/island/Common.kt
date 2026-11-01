@@ -245,18 +245,6 @@ fun Equalizer(color: Color, playing: Boolean, animate: Boolean, modifier: Modifi
     }
 }
 
-/** Мигающий красный кружок записи экрана — вместо эквалайзера и волны. */
-@Composable
-fun RecordingDot(color: Color, animate: Boolean, modifier: Modifier = Modifier) {
-    val time = rememberFxClock(animate)
-    Canvas(modifier) {
-        val pulse = if (animate) 0.35f + 0.65f * pingPong(time.value, 720) else 1f
-        val r = size.minDimension / 2
-        drawCircle(color.copy(alpha = 0.18f * pulse), radius = r)
-        drawCircle(color, radius = r * 0.34f)
-    }
-}
-
 /** Батарейка как в iOS: заливка по уровню заряда и «носик» справа. */
 @Composable
 fun BatteryGlyph(level: Int, color: Color, modifier: Modifier = Modifier) {

@@ -124,6 +124,8 @@ object NotificationParser {
             ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
         ).joinToString(" ").lowercase()
         val recPausedText = listOf("pause", "пауза", "приостанов").any { it in recText }
+        val recTime = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
+            .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
         val recFinishedText = listOf(
             "saved", "saving", "ready", "сохран", "записан", "готов", "finished", "stopped", "останов", "заверш", "обработ",
         ).any { it in recText }
@@ -183,7 +185,12 @@ object NotificationParser {
                 } else {
                     null
                 }
-                val recPaused = recPrev != null && (recResume != null && recPause == null || recPausedText)
+                val recPaused = recording && (
+                    recPausedText ||
+                        (recPrev != null && recResume != null && recPause == null) ||
+                        (recPrev?.chronometer == true && !ticking) ||
+                        (recPrev?.pausedMs != null && !ticking && recPause == null)
+                    )
                 val nowWall = System.currentTimeMillis()
                 val base = when {
                     // При паузе диктофон иногда обновляет notification.when; не начинаем отсчёт с нуля.
@@ -197,7 +204,7 @@ object NotificationParser {
                     else -> n.`when`
                 }
                 val recPausedMs = if (recording && recPaused) {
-                    recPrev?.pausedMs ?: (nowWall - base).coerceAtLeast(0L)
+                    recPrev?.pausedMs ?: recTime ?: (nowWall - base).coerceAtLeast(0L)
                 } else {
                     null
                 }
@@ -212,7 +219,7 @@ object NotificationParser {
                 put(sbn.key, ChronoInfo(sbn.key, sbn.packageName, title, icon(context, sbn.packageName), base, down, sbn.postTime, stop,
                     pausedMs = pausedMs ?: recPausedMs, pause = if (recording) recPause else buttons[ClockAction.PAUSE],
                     resume = if (recording) recResume else buttons[ClockAction.START],
-                    reset = buttons[ClockAction.RESET], recording = recording))
+                    reset = buttons[ClockAction.RESET], recording = recording, chronometer = ticking))
             } else {
                 remove(sbn.key)
             }
@@ -398,7 +405,13 @@ object NotificationParser {
         }
         if (key in IslandBus.calls.value) IslandBus.calls.value = IslandBus.calls.value - key
         if (key in IslandBus.progress.value) IslandBus.progress.value = IslandBus.progress.value - key
-        if (key in IslandBus.chrono.value) IslandBus.chrono.value = IslandBus.chrono.value - key
+        IslandBus.chrono.value[key]?.let { c ->
+            // Пауза таймера/секундомера «Часов» может пересоздать уведомление: не убираем карточку,
+            // чтобы остров не закрылся и можно было нажать «Продолжить».
+            if (c.pausedMs == null || c.recording) {
+                IslandBus.chrono.value = IslandBus.chrono.value - key
+            }
+        }
         if (key in IslandBus.live.value) IslandBus.live.value = IslandBus.live.value - key
         if (key in IslandBus.ringingAlarms.value) IslandBus.ringingAlarms.value = IslandBus.ringingAlarms.value - key
     }

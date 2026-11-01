@@ -91,8 +91,10 @@ data class ChronoInfo(
     val pause: PendingIntent? = null,
     val resume: PendingIntent? = null,
     val reset: PendingIntent? = null,
-    /** Это запись экрана или голоса, а не таймер: красная волна и кнопка «стоп» */
+    /** Это запись экрана или голоса, а не таймер: микрофон и время записи */
     val recording: Boolean = false,
+    /** У уведомления был chronometer-extra — по его исчезновению ловим паузу записи */
+    val chronometer: Boolean = false,
 ) {
     fun elapsed(nowWall: Long): Long = pausedMs ?: if (countDown) (base - nowWall).coerceAtLeast(0) else nowWall - base
 

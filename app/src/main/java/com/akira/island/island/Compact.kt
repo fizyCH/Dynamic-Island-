@@ -192,8 +192,6 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
             CompactRow(h, gap, side * 1.4f,
                 left = {
                     when {
-                        recording && act.c.isScreenRecording ->
-                            RecordingDot(tint, !s.reduceEffects, Modifier.size(h * 0.5f))
                         recording ->
                             Icon(Icons.Rounded.Mic, null, tint = tint, modifier = Modifier.size(h * 0.5f))
                         else -> Icon(Ios.timer, null, tint = tint, modifier = Modifier.size(h * 0.56f))

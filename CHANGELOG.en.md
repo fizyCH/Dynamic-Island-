@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.25] — 2026-11-01
+
+- 🎙️ **Screen recording now uses a microphone**, like the voice recorder, with no blinking dot.
+- ⏸️ **Pausing the voice recorder or screen recording stops the island time** — “(Paused)” in the notification, Resume actions and a disappearing chronometer are recognized.
+- ⏳ **Clock timers and stopwatches stay in the island when paused** and no longer close; Resume remains available.
+- 🚩 Stopwatch: timer icon, a flag button for marks while running, and the mark count next to the time.
+
 ## [1.6.24] — 2026-11-01
 
 - 🚩 **Stopwatch:** the timer icon is back, and while running the close button is replaced by a **flag button for marks**. The mark count is shown next to the time.
