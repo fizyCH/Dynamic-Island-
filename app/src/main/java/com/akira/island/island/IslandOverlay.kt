@@ -57,6 +57,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -278,6 +280,10 @@ fun IslandOverlay(
     val secondary = if (!s.bubble || primary.transient || incoming || calibrating) null
     else acts.drop(1).firstOrNull { !it.transient && it !is Act.AlarmA }
     val showExpanded = expanded && !primary.transient && !incoming && !calibrating
+    // На паузе таймер и секундомер не должны исчезать из-за автосворачивания
+    val pausedFocus = (primary as? Act.TimerA)?.t?.paused == true ||
+        (primary as? Act.StopwatchA)?.w?.running == false ||
+        (primary as? Act.ChronoA)?.c?.pausedMs != null
     val h = s.height.dp
 
     // Пузырь уходит с анимацией, поэтому помним последнюю активность в нём
@@ -297,9 +303,9 @@ fun IslandOverlay(
     }
 
     // «Сворачивать раскрытый остров»: если его столько секунд не трогают, он сворачивается сам
-    LaunchedEffect(showExpanded, s.autoCollapseSec) {
+    LaunchedEffect(showExpanded, s.autoCollapseSec, pausedFocus) {
         val limit = s.autoCollapseSec * 1000L
-        if (!showExpanded || limit <= 0) return@LaunchedEffect
+        if (!showExpanded || limit <= 0 || pausedFocus) return@LaunchedEffect
         val opened = SystemClock.elapsedRealtime()
         while (true) {
             val idle = SystemClock.elapsedRealtime() - maxOf(opened, IslandBus.lastTouch)
@@ -856,7 +862,7 @@ private fun Bubble(act: Act, s: IslandSettings) {
                 )
                 Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.5f))
             }
-            is Act.StopwatchA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
+            is Act.StopwatchA -> Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
             is Act.TorchA -> Icon(Ios.flashlight, null, tint = Tints.Yellow, modifier = Modifier.size(inner * 0.75f))
             is Act.ChronoA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner))
             is Act.ProgressA -> {

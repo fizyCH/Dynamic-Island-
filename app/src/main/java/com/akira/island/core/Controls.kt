@@ -105,6 +105,8 @@ object Controls {
     fun toggleStopwatch() {
         val w = IslandBus.stopwatch.value ?: return
         val now = SystemClock.elapsedRealtime()
+        // Пауза/продолжение не должны давать автосворачиванию убрать остров
+        IslandBus.lastTouch = now
         IslandBus.stopwatch.value =
             if (w.running) StopwatchState(null, w.elapsed(now)) else StopwatchState(now, w.accumulated)
     }

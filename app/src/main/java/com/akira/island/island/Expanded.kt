@@ -388,20 +388,12 @@ private fun TimerExpanded(t: TimerState, s: IslandSettings) {
     val left = t.left(now)
     val color = if (left <= 10_000 && !t.paused) Tints.Red else Tints.Orange
     Row(verticalAlignment = Alignment.CenterVertically) {
-        // Флажок — метка таймера в начале строки
-        Icon(Icons.Rounded.Flag, null, tint = color, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
         RoundButton(if (t.paused) Ios.play else Ios.pause, size = 50.dp,
             bg = color.copy(alpha = 0.25f), fg = color, iconScale = 0.5f) {
             if (t.paused) Controls.resumeTimer() else Controls.pauseTimer()
         }
-        // Крестик нужен только на паузе: пока таймер идёт, его не показываем
-        if (t.paused) {
-            Spacer(Modifier.width(12.dp))
-            RoundButton(Ios.close, size = 44.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) {
-                Controls.cancelTimer()
-            }
-        }
+        Spacer(Modifier.width(12.dp))
+        RoundButton(Ios.close, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) { Controls.cancelTimer() }
         Spacer(Modifier.weight(1f))
         Text(if (t.paused) tr("Пауза", "Paused") else tr("Таймер", "Timer"), color = color, fontSize = 15.sp, modifier = Modifier.padding(top = 14.dp))
         Spacer(Modifier.width(8.dp))
@@ -414,15 +406,16 @@ private fun StopwatchExpanded(w: StopwatchState) {
     val now = rememberNow(100, active = w.running)
     val elapsed = w.elapsed(now)
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // Секундомер, как и таймер, начинается с флажка
+        Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
         RoundButton(if (w.running) Ios.pause else Ios.play, size = 50.dp,
             bg = Tints.Orange.copy(alpha = 0.25f), fg = Tints.Orange, iconScale = 0.5f) { Controls.toggleStopwatch() }
-        Spacer(Modifier.width(12.dp))
-        if (w.running) {
-            RoundButton(Ios.close, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) { Controls.stopStopwatch() }
-        } else {
-            RoundButton(Ios.refresh, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.46f) {
-                Controls.startStopwatch()
-                Controls.toggleStopwatch()
+        // Крестик показываем только на паузе; пока идёт отсчёт, он не нужен
+        if (!w.running) {
+            Spacer(Modifier.width(12.dp))
+            RoundButton(Ios.close, size = 44.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) {
+                Controls.stopStopwatch()
             }
         }
         Spacer(Modifier.weight(1f))
@@ -781,7 +774,7 @@ private fun IdleExpanded(s: IslandSettings, battery: BatteryInfo) {
 @Composable
 private fun QuickButton(a: QuickAction, context: Context, modifier: Modifier) {
     val icon = when (a) {
-        QuickAction.STOPWATCH -> Ios.timer
+        QuickAction.STOPWATCH -> Icons.Rounded.Flag
         QuickAction.FLASHLIGHT -> Ios.flashlight
         QuickAction.SCREENSHOT -> Icons.Rounded.Screenshot
         QuickAction.CAMERA -> Icons.Rounded.PhotoCamera

@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.WifiTethering
@@ -179,7 +180,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
         is Act.StopwatchA -> {
             val now = rememberNow(250, active = act.w.running)
             CompactRow(h, gap, side * 1.4f,
-                left = { Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
+                left = { Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
                 right = { TimeText(formatDuration(act.w.elapsed(now)), Tints.Orange, 18, FontWeight.Bold) },
             )
         }

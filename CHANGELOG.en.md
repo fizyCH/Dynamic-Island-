@@ -6,6 +6,14 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.22] — 2026-11-01
+
+- 🚩 **The flag and close button moved to the stopwatch**: the timer is unchanged. The stopwatch starts with a flag, and the close button appears only when paused.
+- ⏸️ **Pausing the timer and stopwatch no longer collapses the island** — auto-collapse is disabled while paused.
+- 🎙️ Voice recorder without a Stop button, with time synced to pause and resume.
+- 🔴 Screen recording with a blinking dot in the capsule and expanded island.
+- 🛜 Hotspot shutdown removed from the island.
+
 ## [1.6.21] — 2026-11-01
 
 - ⏸️ Pausing the timer resets auto-collapse: the island stays expanded while the timer is paused.
