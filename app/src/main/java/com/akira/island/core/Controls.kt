@@ -76,6 +76,8 @@ object Controls {
     fun pauseTimer() {
         val t = IslandBus.timer.value ?: return
         if (t.pausedLeft == null && !t.ringing) {
+            // Пауза не должна давать автосворачиванию убрать остров из-под пальца
+            IslandBus.lastTouch = SystemClock.elapsedRealtime()
             IslandBus.timer.value = t.copy(pausedLeft = t.left(SystemClock.elapsedRealtime()))
         }
     }
@@ -83,7 +85,10 @@ object Controls {
     fun resumeTimer() {
         val t = IslandBus.timer.value ?: return
         val left = t.pausedLeft ?: return
-        if (!t.ringing) IslandBus.timer.value = t.copy(endAt = SystemClock.elapsedRealtime() + left, pausedLeft = null)
+        if (!t.ringing) {
+            IslandBus.lastTouch = SystemClock.elapsedRealtime()
+            IslandBus.timer.value = t.copy(endAt = SystemClock.elapsedRealtime() + left, pausedLeft = null)
+        }
     }
 
     fun cancelTimer() {
