@@ -18,6 +18,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -413,15 +414,21 @@ private fun Modifier.iosGlassButton(
         return clip(shape).background(bg)
     }
 
-    // У сплошной цветной кнопки стекло должно остаться цветным: подложка — сам цвет кнопки.
-    // У полупрозрачной нейтральной — цвет корпуса острова.
-    val base = if (bg.alpha > 0.95f) bg else Color(s.color)
+    // У сплошной цветной кнопки стекло должно остаться цветным: подложка — сам цвет кнопки,
+    // но чуть приглушённый, чтобы белая кромка и верхний блик читались. У полупрозрачной
+    // нейтральной — цвет корпуса острова.
+    val solid = bg.alpha > 0.95f
+    val base = if (solid) bg.copy(alpha = 0.9f).compositeOver(Color(s.color)) else Color(s.color)
     val tint = glassTint(bg)
     val strength = ((opacity.coerceIn(0.4f, 0.95f) - 0.4f) / 0.55f).coerceIn(0f, 1f)
-    val onDraw: DrawScope.() -> Unit = remember(base, tint) {
+    val onDraw: DrawScope.() -> Unit = remember(base, tint, solid) {
         {
-            val light = (tint?.copy(alpha = 0.18f) ?: Color.White.copy(alpha = 0.14f)).compositeOver(base)
-            val dark = Color.Black.copy(alpha = 0.20f).compositeOver(base)
+            val light = when {
+                solid -> Color.White.copy(alpha = 0.20f)
+                tint != null -> tint.copy(alpha = 0.18f)
+                else -> Color.White.copy(alpha = 0.14f)
+            }.compositeOver(base)
+            val dark = Color.Black.copy(alpha = if (solid) 0.26f else 0.20f).compositeOver(base)
             drawRect(
                 Brush.verticalGradient(
                     0f to light,
@@ -442,10 +449,10 @@ private fun Modifier.iosGlassButton(
         }
     }
     val backdrop = rememberCanvasBackdrop(onDraw)
-    val veil = if (tint != null) {
-        tint.copy(alpha = 0.12f + 0.18f * strength)
-    } else {
-        Color.White.copy(alpha = 0.07f + 0.08f * strength)
+    val veil = when {
+        solid -> Color.White.copy(alpha = 0.04f + 0.05f * strength)
+        tint != null -> tint.copy(alpha = 0.12f + 0.18f * strength)
+        else -> Color.White.copy(alpha = 0.07f + 0.08f * strength)
     }
 
     return drawBackdrop(
@@ -479,11 +486,15 @@ private fun Modifier.iosGlassButton(
             // Верхний блик — мягкий, без «мыльной» плёнки на всей кнопке
             drawRect(
                 Brush.verticalGradient(
-                    0f to Color.White.copy(alpha = 0.10f + 0.06f * strength),
+                    0f to Color.White.copy(alpha = (if (solid) 0.16f else 0.10f) + 0.06f * strength),
                     0.48f to Color.Transparent,
                 ),
             )
         },
+    ).border(
+        width = 0.7.dp,
+        color = Color.White.copy(alpha = if (solid) 0.22f else 0.14f),
+        shape = shape,
     )
 }
 

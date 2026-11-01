@@ -15,7 +15,7 @@
 [![Сборка](https://img.shields.io/github/actions/workflow/status/Akira9021/Dynamic-Island-/android.yml?style=for-the-badge&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1C1B22)](https://github.com/Akira9021/Dynamic-Island-/actions)
 <br>
 ![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
 ![Без рекламы](https://img.shields.io/badge/%D1%80%D0%B5%D0%BA%D0%BB%D0%B0%D0%BC%D1%8B-0-black?style=flat-square)
 
@@ -134,7 +134,7 @@
   - **Положение и размер** — сдвиг по горизонтали, отступ сверху, ширина, высота и «Как вырез»; капсула меняется на экране сразу.
   - **Размер с активностью** — насколько капсула с активностью толще и шире спокойной, с живым примером.
   - **Цвет капсулы** — цвет, контур (цвет, толщина, цвет из обложки) и тень.
-  - **Liquid Glass** *(экспериментальный)* — стеклянный остров и карточки, плотность стекла.
+  - **Liquid Glass кнопок** — стеклянные кнопки плеера и быстрых действий, плотность стекла; капсула и кнопки звонка остаются сплошными.
   - **Раскрытие острова** — стиль («Как Фрукт» с эффектом желе, «Пружина», «Плавно», «Без анимации»), длительность, упругость, «Уменьшить эффекты».
   - **Эффекты** — размытие, живой эквалайзер, вздрагивание, волны оплаты, свечение обложки и экономия заряда.
 - **О приложении** — версия и обновления (автопроверка раз в 3 часа, «Проверить сейчас», «Что нового»), инструкция, диагностика навигации и «Страница GitHub» — ссылка сюда.

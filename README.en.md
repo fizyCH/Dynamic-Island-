@@ -15,7 +15,7 @@ Notifications with reply · navigation · payments · music with lyrics · calls
 [![Build](https://img.shields.io/github/actions/workflow/status/Akira9021/Dynamic-Island-/android.yml?style=for-the-badge&label=build&labelColor=1C1B22)](https://github.com/Akira9021/Dynamic-Island-/actions)
 <br>
 ![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)
 ![No ads](https://img.shields.io/badge/ads-0-black?style=flat-square)
 
@@ -137,7 +137,7 @@ Four tabs:
   - **Position and size** — horizontal offset, top offset, width, height and Like a notch; the capsule updates on screen right away.
   - **Size with activity** — how much thicker and wider the capsule with an activity is than the idle one, with a live preview.
   - **Capsule color** — color, outline (color, thickness, color from artwork) and shadow.
-  - **Liquid Glass** *(experimental)* — a glass island and cards, glass density.
+  - **Button Liquid Glass** — glass player and quick-action buttons, with glass density; the capsule and call buttons stay solid.
   - **Island expansion** — style ("Like a Fruit" with a jelly effect, "Spring", "Smooth", "No animation"), duration, elasticity, Reduce effects.
   - **Effects** — blur, live equalizer, shake, payment waves, artwork glow and battery saving.
 - **About** («О приложении») — version and updates (an auto-check every 3 hours, Check now, What's new), instructions, navigation diagnostics and the GitHub page button («Страница GitHub») that leads here.
