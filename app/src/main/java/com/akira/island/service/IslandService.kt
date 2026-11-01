@@ -183,9 +183,7 @@ class IslandService : AccessibilityService() {
         alarmMonitor = AlarmMonitor(this).also { it.start() }
         IslandBus.serviceRunning.value = true
 
-        // Если уведомление не дало кнопку «Стоп», служба сама нажмёт плитку/кнопку в системной панели.
-        // Это не прямой API (для него нужны системные права), но и не переход в настройки.
-        Controls.stopHotspotAutomation = { runSystemAutomation { stopHotspotViaQuickSettings() } }
+        // Если запись не дала кнопку «Стоп», служба сама нажмёт её в системной шторке.
         Controls.stopRecordingAutomation = { info -> runSystemAutomation { stopRecordingViaShade(info) } }
 
         // Входящий смахнули — он скрыт, пока звонит; перестал звонить — следующий входящий снова в острове.
@@ -388,27 +386,6 @@ class IslandService : AccessibilityService() {
         }
     }
 
-    private suspend fun stopHotspotViaQuickSettings() {
-        if (!performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)) {
-            automationToast("Не удалось открыть панель быстрых настроек", "Couldn't open Quick Settings")
-            return
-        }
-        val node = awaitSystemUiNode { it.label().let { l -> hotspotWords.any { w -> w in l } } } ?:
-            awaitSystemUiNode { it.viewIdResourceName?.contains("hotspot", ignoreCase = true) == true }
-        if (node == null) {
-            closeSystemUi()
-            automationToast("Не нашёл плитку точки доступа", "Couldn't find the hotspot tile")
-            return
-        }
-        if (!clickNode(node)) {
-            closeSystemUi()
-            automationToast("Не удалось нажать точку доступа", "Couldn't tap the hotspot tile")
-            return
-        }
-        delay(500)
-        closeSystemUi()
-    }
-
     private suspend fun stopRecordingViaShade(c: ChronoInfo) {
         val opened = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
@@ -521,10 +498,6 @@ class IslandService : AccessibilityService() {
         Toast.makeText(this, tr(ru, en), Toast.LENGTH_SHORT).show()
     }
 
-    private val hotspotWords = listOf(
-        "hotspot", "tether", "access point", "portable hotspot", "wi-fi hotspot",
-        "точка доступа", "раздач",
-    )
     private val stopWords = listOf(
         "стоп", "останов", "заверш", "готов",
         "stop", "finish", "end", "done",
@@ -852,7 +825,6 @@ class IslandService : AccessibilityService() {
         handler.removeCallbacks(touchUpdate)
         handler.removeCallbacks(screenToneSample)
         ScreenTone.clear()
-        Controls.stopHotspotAutomation = {}
         Controls.stopRecordingAutomation = {}
         IslandBus.egg.value = false
         IslandBus.serviceRunning.value = false

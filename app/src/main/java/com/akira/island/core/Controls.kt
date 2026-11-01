@@ -23,8 +23,7 @@ object Controls {
     var torchOff: () -> Unit = {}
     var torchLevel: (Int) -> Unit = {}
 
-    /** Точка доступа и запись не отдали кнопку в уведомлении — их выключает служба через Quick Settings/шторку. */
-    var stopHotspotAutomation: () -> Unit = {}
+    /** Запись не отдала кнопку в уведомлении — её остановит служба через шторку. */
     var stopRecordingAutomation: (ChronoInfo) -> Unit = {}
 
     fun expand(id: String) {
@@ -208,16 +207,7 @@ object Controls {
         }
     }
 
-    /**
-     * Выключить точку доступа: сначала кнопка «Отключить» из уведомления, иначе автоматика
-     * через Quick Settings. В настройки не перекидываем — даже если автоматика не найдет плитку.
-     */
-    fun stopHotspot(context: Context, info: HotspotInfo) {
-        if (send(context, info.stop)) return
-        stopHotspotAutomation()
-    }
-
-    /** Остановить запись: кнопка «Стоп» из уведомления, иначе автоматика через шторку. */
+    /** Остановить запись экрана: кнопка «Стоп» из уведомления, иначе автоматика через шторку. */
     fun stopRecording(context: Context, c: ChronoInfo) {
         if (send(context, c.stop)) return
         stopRecordingAutomation(c)

@@ -24,7 +24,6 @@ import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.launch
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.abs
 import kotlin.math.sin
@@ -58,10 +57,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.HeartBroken
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Screenshot
@@ -134,7 +134,7 @@ fun ExpandedContent(act: Act, s: IslandSettings, lyrics: Lyrics?, battery: Batte
             is Act.TimerA -> TimerExpanded(act.t, s)
             is Act.StopwatchA -> StopwatchExpanded(act.w)
             is Act.TorchA -> Unit
-            is Act.ChronoA -> ChronoExpanded(act.c)
+            is Act.ChronoA -> ChronoExpanded(act.c, s)
             is Act.ProgressA -> ProgressExpanded(act.p)
             is Act.ChargingA -> ChargingExpanded(act.b)
             is Act.HotspotA -> HotspotExpanded(act.h)
@@ -388,12 +388,20 @@ private fun TimerExpanded(t: TimerState, s: IslandSettings) {
     val left = t.left(now)
     val color = if (left <= 10_000 && !t.paused) Tints.Red else Tints.Orange
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // Флажок — метка таймера в начале строки
+        Icon(Icons.Rounded.Flag, null, tint = color, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
         RoundButton(if (t.paused) Ios.play else Ios.pause, size = 50.dp,
             bg = color.copy(alpha = 0.25f), fg = color, iconScale = 0.5f) {
             if (t.paused) Controls.resumeTimer() else Controls.pauseTimer()
         }
-        Spacer(Modifier.width(12.dp))
-        RoundButton(Ios.close, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) { Controls.cancelTimer() }
+        // Крестик нужен только на паузе: пока таймер идёт, его не показываем
+        if (t.paused) {
+            Spacer(Modifier.width(12.dp))
+            RoundButton(Ios.close, size = 44.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) {
+                Controls.cancelTimer()
+            }
+        }
         Spacer(Modifier.weight(1f))
         Text(if (t.paused) tr("Пауза", "Paused") else tr("Таймер", "Timer"), color = color, fontSize = 15.sp, modifier = Modifier.padding(top = 14.dp))
         Spacer(Modifier.width(8.dp))
@@ -502,25 +510,32 @@ private fun TorchCard(t: TorchState, s: IslandSettings) {
 
 /** Таймер или секундомер из Часов, звонок по VoIP и запись экрана или звука — запись красной волной и кнопкой «стоп». */
 @Composable
-private fun ChronoExpanded(c: ChronoInfo) {
+private fun ChronoExpanded(c: ChronoInfo, s: IslandSettings) {
     val context = LocalContext.current
     val now = rememberWallNow(500)
     if (c.isRecording) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RecordingWave(Modifier.weight(1f).height(22.dp))
-            Spacer(Modifier.width(14.dp))
+            if (c.isScreenRecording) {
+                RecordingDot(Tints.Red, !s.reduceEffects, Modifier.size(24.dp))
+            } else {
+                Icon(Icons.Rounded.Mic, null, tint = Tints.Red, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(12.dp))
             Text(formatDuration(c.elapsed(now)), color = Tints.Red, fontSize = 22.sp, style = Digits)
-            Spacer(Modifier.width(14.dp))
-            // Белое кольцо с красным квадратом — как кнопка «стоп» диктофона на iPhone
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .border(3.dp, Color.White, CircleShape)
-                    .clickable { Controls.stopRecording(context, c) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(Tints.Red))
+            Spacer(Modifier.weight(1f))
+            if (c.isScreenRecording) {
+                // Белое кольцо с красным квадратом — кнопка «стоп» записи экрана.
+                // У диктофона кнопки нет: он только показывает синхронное время.
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, Color.White, CircleShape)
+                        .clickable { Controls.stopRecording(context, c) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(Tints.Red))
+                }
             }
         }
         return
@@ -571,29 +586,6 @@ private fun ClockChrono(c: ChronoInfo) {
             }
             val text = if (c.countDown) formatDuration(value + 999) else formatDuration(value) + ",%d".format((value % 1000) / 100)
             Text(text, color = color, fontSize = 40.sp, style = Digits.copy(fontWeight = FontWeight.Normal), maxLines = 1, softWrap = false)
-        }
-    }
-}
-
-/** Волна записи: слева идут красные столбики, справа ждёт пунктир — как у диктофона в острове. */
-@Composable
-private fun RecordingWave(modifier: Modifier) {
-    val t = rememberInfiniteTransition(label = "rec")
-    val phase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "ph")
-    Canvas(modifier) {
-        val step = 4.dp.toPx()
-        val n = (size.width / step).toInt()
-        val active = (n * 0.55f).toInt()
-        for (i in 0 until n) {
-            val x = i * step + step / 2
-            if (i < active) {
-                val k = 0.25f + 0.75f * abs(sin((i * 0.7f + phase * 6.28f).toDouble())).toFloat()
-                val h = size.height * k
-                drawLine(Tints.Red, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2),
-                    strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-            } else {
-                drawCircle(Tints.Red.copy(alpha = 0.45f), radius = 1.dp.toPx(), center = Offset(x, size.height / 2))
-            }
         }
     }
 }
@@ -669,8 +661,6 @@ private fun LiveExpanded(l: LiveInfo) {
 /** Активная точка доступа: значок, название и число подключённых устройств. */
 @Composable
 private fun HotspotExpanded(info: HotspotInfo) {
-    val context = LocalContext.current
-    val haptic = rememberHaptic()
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(52.dp).clip(CircleShape).background(Tints.Blue.copy(alpha = 0.2f)),
@@ -682,17 +672,6 @@ private fun HotspotExpanded(info: HotspotInfo) {
         Column(Modifier.weight(1f)) {
             Text(tr("Точка доступа", "Personal Hotspot"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(info.clientsText, color = Tints.Blue, fontSize = 15.sp)
-        }
-        Spacer(Modifier.width(10.dp))
-        RoundButton(
-            Icons.Rounded.PowerSettingsNew,
-            size = 44.dp,
-            bg = Tints.Red.copy(alpha = 0.2f),
-            fg = Tints.Red,
-            iconScale = 0.55f,
-        ) {
-            haptic()
-            Controls.stopHotspot(context, info)
         }
     }
 }

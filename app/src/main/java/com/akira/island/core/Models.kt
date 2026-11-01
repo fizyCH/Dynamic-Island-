@@ -111,6 +111,18 @@ data class ChronoInfo(
     /** Запись экрана или звука — показывается красным. */
     val isRecording: Boolean
         get() = recording || title.lowercase().let { t -> "record" in t || "запис" in t }
+
+    /** Это именно запись экрана, а не диктофон: у неё мигающий кружок и кнопка «Стоп». */
+    val isScreenRecording: Boolean
+        get() {
+            if (!isRecording) return false
+            val p = pkg.lowercase()
+            val t = title.lowercase()
+            return p == "com.android.systemui" || "screen" in p || "screen" in t || "экран" in t
+        }
+
+    /** Диктофон: кнопку «Стоп» в острове не показываем, только синхронное время. */
+    val isVoiceRecording: Boolean get() = isRecording && !isScreenRecording
 }
 
 /** Активная точка доступа: сколько устройств подключено. */

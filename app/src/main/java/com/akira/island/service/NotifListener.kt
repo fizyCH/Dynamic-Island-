@@ -151,6 +151,7 @@ object NotificationParser {
             else -> null
         }
         // Неактивный (на паузе) таймер, который остров уже убрал, снова не показываем
+        val previousChrono = IslandBus.chrono.value[sbn.key]
         val chrono = call == null && !isMedia &&
             (ticking || remote != null || textTime != null || pausedMs != null || recording) &&
             !ClockControl.wasDismissed(sbn.key, pausedMs)
@@ -158,11 +159,30 @@ object NotificationParser {
         if (pausedMs != null && chrono) ClockControl.dropPausedLater(sbn.key)
         IslandBus.chrono.value = IslandBus.chrono.value.toMutableMap().apply {
             if (chrono) {
+                val recPrev = previousChrono?.takeIf { it.recording }
+                val recPause = if (recording) actionByWords(n, listOf("пауза", "pause")) else null
+                val recResume = if (recording) {
+                    actionByWords(n, listOf("продолж", "возобнов", "resume"))
+                } else {
+                    null
+                }
+                val recPaused = recPrev != null && recResume != null && recPause == null
+                val nowWall = System.currentTimeMillis()
                 val base = when {
-                    recording -> recordingBase
+                    // При паузе диктофон иногда обновляет notification.when; не начинаем отсчёт с нуля.
+                    // На возобновлении сдвигаем базу на застывшее время, чтобы пауза не попала в отсчёт.
+                    recording && recPaused -> recPrev?.base ?: recordingBase
+                    recording && recPrev?.pausedMs != null && recPause != null ->
+                        nowWall - (recPrev.pausedMs ?: 0L)
+                    recording -> recPrev?.base ?: recordingBase
                     remote != null -> remote.base
                     textTime != null -> textBase ?: n.`when`
                     else -> n.`when`
+                }
+                val recPausedMs = if (recording && recPaused) {
+                    recPrev?.pausedMs ?: (nowWall - base).coerceAtLeast(0L)
+                } else {
+                    null
                 }
                 val down = when {
                     recording -> false
@@ -173,7 +193,8 @@ object NotificationParser {
                 }
                 val stop = stopAction(n, fallbackLast = recording)
                 put(sbn.key, ChronoInfo(sbn.key, sbn.packageName, title, icon(context, sbn.packageName), base, down, sbn.postTime, stop,
-                    pausedMs = pausedMs, pause = buttons[ClockAction.PAUSE], resume = buttons[ClockAction.START],
+                    pausedMs = pausedMs ?: recPausedMs, pause = if (recording) recPause else buttons[ClockAction.PAUSE],
+                    resume = if (recording) recResume else buttons[ClockAction.START],
                     reset = buttons[ClockAction.RESET], recording = recording))
             } else {
                 remove(sbn.key)
@@ -202,6 +223,12 @@ object NotificationParser {
             Messages.maybeShow(service, sbn, appLabel(context, sbn.packageName))
         }
     }
+
+    /** Действие уведомления по словам в подписи — для паузы и продолжения записи. */
+    private fun actionByWords(n: Notification, words: List<String>): PendingIntent? =
+        n.actions.orEmpty().firstOrNull { a ->
+            a.actionIntent != null && words.any { it in a.title?.toString()?.lowercase().orEmpty() }
+        }?.actionIntent
 
     /** Кнопка «Стоп» в записи/таймере: по подписи, а для записи — крайняя кнопка, если подписи нет. */
     private fun stopAction(n: Notification, fallbackLast: Boolean): PendingIntent? {

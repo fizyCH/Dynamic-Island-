@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.19] — 2026-11-01
+
+- 🛜 **Hotspot shutdown removed from the island** — the card still shows connected devices but no longer tries to turn tethering off.
+- 🚩 **The expanded timer starts with a flag**, and the close button appears only after pausing. Pausing no longer removes the island.
+- 🎙️ **The voice recorder has no Stop button in the island**; its time now stays in sync with the recording, including pause and resume, and no longer restarts from zero.
+- 🔴 **Screen recording uses a blinking red dot instead of the equalizer** — in the capsule and the expanded island. The screen-recording stop button remains.
+
 ## [1.6.18] — 2026-11-01
 
 - 🛜 **Hotspot turns off from the island** — with the notification action when available; otherwise the service taps the Hotspot tile in Quick Settings. No settings page opens.
