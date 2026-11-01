@@ -297,8 +297,10 @@ fun IslandOverlay(
     val focusGone = expanded && focus != null && focus != Act.Idle.id && acts.none { it.id == focus }
     LaunchedEffect(focusGone, focus) {
         if (!focusGone) return@LaunchedEffect
-        // Плеер на миг теряет метаданные, пока готовит следующий трек, — не сворачиваем карточку сразу
+        // Плеер на миг теряет метаданные, пока готовит следующий трек, — не сворачиваем карточку сразу.
+        // «Часы» и диктофон на паузе тоже могут пересоздать уведомление: даём ему время вернуться.
         if (focus == "media") delay(3_000)
+        else if (focus == "timer" || focus == "stopwatch" || focus == "chrono") delay(2_000)
         Controls.collapse()
     }
 
@@ -864,7 +866,12 @@ private fun Bubble(act: Act, s: IslandSettings) {
             }
             is Act.StopwatchA -> Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
             is Act.TorchA -> Icon(Ios.flashlight, null, tint = Tints.Yellow, modifier = Modifier.size(inner * 0.75f))
-            is Act.ChronoA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner))
+            is Act.ChronoA -> Icon(
+                if (act.c.countDown) Ios.timer else Icons.Rounded.Flag,
+                null,
+                tint = Tints.Orange,
+                modifier = Modifier.size(inner),
+            )
             is Act.ProgressA -> {
                 ProgressRing(act.p.fraction, Tints.Blue, Modifier.size(inner), stroke = 2.5.dp)
                 Icon(Ios.download, null, tint = Tints.Blue, modifier = Modifier.size(inner * 0.5f))

@@ -539,7 +539,7 @@ private fun ChronoExpanded(c: ChronoInfo, s: IslandSettings) {
         return
     }
     Row(Modifier.clickable { Controls.openApp(context, c.pkg) }, verticalAlignment = Alignment.CenterVertically) {
-        Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(46.dp))
+        Icon(if (c.countDown) Ios.timer else Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(46.dp))
         Spacer(Modifier.width(14.dp))
         Text(c.title, color = Tints.Orange, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(top = 12.dp))
@@ -572,7 +572,7 @@ private fun ClockChrono(c: ChronoInfo) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).clickable { Controls.openApp(context, c.pkg) }, horizontalAlignment = Alignment.End) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Ios.timer, null, tint = color, modifier = Modifier.size(16.dp))
+                Icon(if (c.countDown) Ios.timer else Icons.Rounded.Flag, null, tint = color, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(if (paused) tr("Пауза", "Paused") else if (c.countDown) tr("Таймер", "Timer") else tr("Секундомер", "Stopwatch"),
                     color = color, fontSize = 14.sp, maxLines = 1)

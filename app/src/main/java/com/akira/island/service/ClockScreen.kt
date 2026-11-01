@@ -822,7 +822,6 @@ object ClockControl {
             ClockAction.RESET -> null
         }
         IslandBus.chrono.value = if (next == null) IslandBus.chrono.value - c.key else IslandBus.chrono.value + (c.key to next)
-        if (next?.pausedMs != null) dropPausedLater(c.key)
     }
 
     /** Уведомления «Часов» на паузе, которые остров уже убрал: ключ → застывшее время */

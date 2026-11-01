@@ -116,8 +116,20 @@ object NotificationParser {
         val channelKey = "${sbn.packageName}|${n.channelId.orEmpty()}"
         val knownRecording = sbn.key in recordingKeys
         val recentChannel = (recordingChannels[channelKey] ?: 0L) > nowElapsed
-        val recording = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
+        val recText = listOfNotNull(
+            title,
+            n.tickerText?.toString(),
+            ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+        ).joinToString(" ").lowercase()
+        val recPausedText = listOf("pause", "пауза", "приостанов").any { it in recText }
+        val recFinishedText = listOf(
+            "saved", "saving", "ready", "сохран", "записан", "готов", "finished", "stopped", "останов", "заверш", "обработ",
+        ).any { it in recText }
+        val recordingCandidate = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
             (recentChannel && ongoing)
+        val recording = recordingCandidate && !recFinishedText && (ongoing || recPausedText)
         if (recording) {
             recordingKeys += sbn.key
             recordingChannels[channelKey] = nowElapsed + 15_000L
@@ -143,20 +155,25 @@ object NotificationParser {
             if (looksLikeTimer(n, title)) now + time else now - time
         }
         // Таймер или секундомер «Часов» на паузе: счёт стоит, время только в тексте, а в кнопках — «Продолжить»
+        val previousChrono = IslandBus.chrono.value[sbn.key]
+        // Google Часы добавляют «(Пауза)» / «(Paused)» к названию, а время могут оставить только в тексте.
+        val titlePaused = recPausedText
+        val pausedFromText = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
+            .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
         val pausedMs = when {
-            remote != null -> remotePausedMs
-            clock && !ticking && call == null && !isMedia && ClockAction.START in buttons ->
-                listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
-                    .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
+            remote != null -> remotePausedMs ?: if (clock && titlePaused) {
+                previousChrono?.pausedMs ?: previousChrono?.elapsed(System.currentTimeMillis()) ?: pausedFromText
+            } else {
+                null
+            }
+            clock && !ticking && call == null && !isMedia && ClockAction.START in buttons -> pausedFromText
+            clock && titlePaused ->
+                previousChrono?.pausedMs ?: previousChrono?.elapsed(System.currentTimeMillis()) ?: pausedFromText
             else -> null
         }
-        // Неактивный (на паузе) таймер, который остров уже убрал, снова не показываем
-        val previousChrono = IslandBus.chrono.value[sbn.key]
         val chrono = call == null && !isMedia &&
-            (ticking || remote != null || textTime != null || pausedMs != null || recording) &&
-            !ClockControl.wasDismissed(sbn.key, pausedMs)
+            (ticking || remote != null || textTime != null || pausedMs != null || recording)
         if (clock && chrono) ClockControl.reader?.onNotificationChrono(sbn.packageName)
-        if (pausedMs != null && chrono) ClockControl.dropPausedLater(sbn.key)
         IslandBus.chrono.value = IslandBus.chrono.value.toMutableMap().apply {
             if (chrono) {
                 val recPrev = previousChrono?.takeIf { it.recording }
@@ -166,21 +183,13 @@ object NotificationParser {
                 } else {
                     null
                 }
-                val recText = listOfNotNull(
-                    title,
-                    ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
-                    ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
-                ).joinToString(" ").lowercase()
-                val recPaused = recPrev != null && (
-                    recResume != null && recPause == null ||
-                        ("paused" in recText || "пауза" in recText || "приостанов" in recText)
-                    )
+                val recPaused = recPrev != null && (recResume != null && recPause == null || recPausedText)
                 val nowWall = System.currentTimeMillis()
                 val base = when {
                     // При паузе диктофон иногда обновляет notification.when; не начинаем отсчёт с нуля.
                     // На возобновлении сдвигаем базу на застывшее время, чтобы пауза не попала в отсчёт.
                     recording && recPaused -> recPrev?.base ?: recordingBase
-                    recording && recPrev?.pausedMs != null && recPause != null ->
+                    recording && recPrev?.pausedMs != null && !recPaused ->
                         nowWall - (recPrev.pausedMs ?: 0L)
                     recording -> recPrev?.base ?: recordingBase
                     remote != null -> remote.base

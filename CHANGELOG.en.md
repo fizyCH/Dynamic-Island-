@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.23] — 2026-11-01
+
+- ⏸️ **Pausing a Clock timer or stopwatch no longer closes the island**: the “(Paused)” title is recognized and the card stays open.
+- 🚩 **The stopwatch flag now also appears for the system Clock** — in the capsule, expanded island and bubble. The timer is unchanged.
+- 🎙️ **Voice recorder** freezes its time while paused and continues from the same point; the card no longer lingers after a full stop.
+- 🔴 **Screen recording** reacts to pause and shows the blinking dot in both states.
+
 ## [1.6.22] — 2026-11-01
 
 - 🚩 **The flag and close button moved to the stopwatch**: the timer is unchanged. The stopwatch starts with a flag, and the close button appears only when paused.
