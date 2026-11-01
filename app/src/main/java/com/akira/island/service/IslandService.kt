@@ -43,6 +43,7 @@ import com.akira.island.island.Egg
 import com.akira.island.island.ISLAND_PAD_DP
 import com.akira.island.island.IslandOverlay
 import com.akira.island.ui.InterTypography
+import com.akira.island.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -265,6 +266,14 @@ class IslandService : AccessibilityService() {
             }
         }
 
+        // Новая версия форка на GitHub: проверка сама ограничена разом в 3 часа, здесь только будим её
+        scope.launch {
+            while (isActive) {
+                if (IslandBus.screenOn.value) UpdateChecker.check(this@IslandService, force = false, announce = true)
+                delay(60 * 60 * 1000L)
+            }
+        }
+
         // «По расписанию»: проверяем ровно на границах часов и со включением экрана (пока телефон спит, ожидание стоит)
         scope.launch {
             combine(SettingsRepo.state.map { Triple(it.scheduleOn, it.scheduleFrom, it.scheduleTo) }.distinctUntilChanged(), IslandBus.screenOn) { sch, _ -> sch }
@@ -282,6 +291,16 @@ class IslandService : AccessibilityService() {
                         delay(next.timeInMillis - now.timeInMillis + 500)
                     }
                 }
+        }
+
+        // Обновились — один раз карточка «Обновлено», как в ролике (первая установка молчит)
+        val version = UpdateChecker.currentVersion(this)
+        val seen = SettingsRepo.current.islandVersion
+        if (seen != version) {
+            if (seen.isNotEmpty() && SettingsRepo.current.autoUpdateCheck) {
+                IslandBus.post(UpdateChecker.updatedNotice(this, version))
+            }
+            SettingsRepo.update { copy(islandVersion = version) }
         }
 
         // Пасхалка: та самая песня играет — окно острова высокое, пока горят эффекты, и ещё чуть-чуть, пока гаснут

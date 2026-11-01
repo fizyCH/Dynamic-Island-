@@ -35,7 +35,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,8 +66,11 @@ import com.akira.island.ui.Pos
 import com.akira.island.ui.Screen
 import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
+import com.akira.island.ui.UpdateSection
+import com.akira.island.ui.updateStatusText
 import com.akira.island.ui.Ui
 import com.akira.island.update.UpdateChecker
+import com.akira.island.update.UpdateState
 
 @Composable
 fun InstructionScreen(onBack: () -> Unit) {
@@ -187,11 +192,25 @@ private fun openUrl(context: Context, url: String) {
 fun AppInfoScreen(open: (Screen) -> Unit) {
     val context = LocalContext.current
     val s by SettingsRepo.state.collectAsState()
+    val update by UpdateChecker.state.collectAsState()
+    val scope = rememberCoroutineScope()
     val version = remember { UpdateChecker.currentVersion(context) }
     var notes by remember { mutableStateOf(false) }
 
     Page(tr("О приложении", "About")) {
         AppHeader(version)
+        UpdateSection()
+
+        SectionHeader(tr("Обновления", "Updates"))
+        Group {
+            GroupToggle(Pos.First, Icons.Rounded.SystemUpdate, tr("Искать обновления", "Check for updates"),
+                tr("Раз в 3 часа проверять релизы форка на GitHub", "Check the fork's GitHub releases every 3 hours"),
+                s.autoUpdateCheck, color = Tile.Green) { v ->
+                SettingsRepo.update { copy(autoUpdateCheck = v) }
+            }
+            GroupItem(Pos.Last, Icons.Rounded.Refresh, tr("Проверить сейчас", "Check now"), updateStatusText(update, version),
+                onClick = { scope.launch { UpdateChecker.check(context.applicationContext, force = true) } }, color = Tile.Blue)
+        }
 
         SectionHeader(tr("Помощь", "Help"))
         Group {

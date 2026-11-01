@@ -118,15 +118,12 @@ object Controls {
     /** Нажать кнопку из уведомления (ответить, отклонить, открыть). */
     fun send(context: Context, intent: PendingIntent?): Boolean {
         intent ?: return false
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                val options = ActivityOptions.makeBasic()
-                    .setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
-                intent.send(context, 0, null, null, null, null, options.toBundle())
-            } else {
-                intent.send()
-            }
-        }.isSuccess
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val options = ActivityOptions.makeBasic()
+                .setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            if (runCatching { intent.send(context, 0, null, null, null, null, options.toBundle()) }.isSuccess) return true
+        }
+        return runCatching { intent.send() }.isSuccess
     }
 
     /** Отправить ответ через кнопку «Ответить» из уведомления — так же, как это делает шторка. */

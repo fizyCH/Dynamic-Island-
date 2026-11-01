@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
@@ -93,6 +94,7 @@ import com.akira.island.island.rememberHaptic
 import com.akira.island.service.NotificationParser
 import com.akira.island.service.ScreenTone
 import com.akira.island.service.SystemBanners
+import com.akira.island.update.UpdateChecker
 import com.akira.island.ui.Group
 import com.akira.island.ui.GroupItem
 import com.akira.island.ui.ItemIcon
@@ -103,6 +105,7 @@ import com.akira.island.ui.Pos
 import com.akira.island.ui.Screen
 import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
+import com.akira.island.ui.UpdateSection
 import com.akira.island.ui.ToggleCard
 import com.akira.island.ui.Ui
 import kotlinx.coroutines.delay
@@ -157,6 +160,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
 
     Page(tr("Динамический остров", "Dynamic Island")) {
         IslandPreview()
+        UpdateSection()
 
         // Без службы спец. возможностей острова нет вовсе — это первый шаг
         if (!perms.accessibility) {
@@ -481,6 +485,10 @@ private fun demos(context: Context): List<Demo> = listOf(
     },
     Demo(Icons.Rounded.Navigation, tr("Навигатор", "Navigation"), tr("Стрелка поворота и метры до неё", "The turn arrow and meters to it"), Tile.Purple) {
         Controls.showTestLive(context)
+    },
+    Demo(Icons.Rounded.SystemUpdate, tr("Обновление", "Update"),
+        tr("Карточка новой версии: загрузка и «Обновлено»", "The new version card: download, then Updated"), Tile.Pink) {
+        UpdateChecker.showDemo(context)
     },
 )
 
