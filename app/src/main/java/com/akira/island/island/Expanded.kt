@@ -567,14 +567,23 @@ private fun ClockChrono(c: ChronoInfo) {
     val now = rememberWallNow(if (paused) 1_000 else if (c.countDown) 250 else 100)
     val value = c.elapsed(now)
     val color = if (c.countDown && !paused && value <= 10_000) Tints.Red else Tints.Orange
+    // Для секундомера «Часов» — свои метки, как у нашего секундомера
+    var flags by remember(c.key) { mutableStateOf(0) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         RoundButton(if (paused) Ios.play else Ios.pause, size = 50.dp, bg = color.copy(alpha = 0.25f), fg = color, iconScale = 0.5f) {
             ClockControl.toggle(context, c)
         }
         Spacer(Modifier.width(12.dp))
-        RoundButton(if (c.countDown) Ios.close else Ios.refresh, size = 50.dp, bg = Color.White.copy(alpha = 0.2f),
-            iconScale = if (c.countDown) 0.44f else 0.46f) {
-            ClockControl.reset(context, c)
+        if (!c.countDown && !paused) {
+            RoundButton(Icons.Rounded.Flag, size = 44.dp, bg = color.copy(alpha = 0.25f), fg = color, iconScale = 0.52f) {
+                flags++
+            }
+        } else {
+            RoundButton(if (c.countDown) Ios.close else Ios.refresh, size = 50.dp, bg = Color.White.copy(alpha = 0.2f),
+                iconScale = if (c.countDown) 0.44f else 0.46f) {
+                if (!c.countDown) flags = 0
+                ClockControl.reset(context, c)
+            }
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).clickable { Controls.openApp(context, c.pkg) }, horizontalAlignment = Alignment.End) {
@@ -583,6 +592,12 @@ private fun ClockChrono(c: ChronoInfo) {
                 Spacer(Modifier.width(5.dp))
                 Text(if (paused) tr("Пауза", "Paused") else if (c.countDown) tr("Таймер", "Timer") else tr("Секундомер", "Stopwatch"),
                     color = color, fontSize = 14.sp, maxLines = 1)
+                if (!c.countDown && flags > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Icon(Icons.Rounded.Flag, null, tint = color.copy(alpha = 0.7f), modifier = Modifier.size(11.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text("$flags", color = color.copy(alpha = 0.7f), fontSize = 12.sp, style = Digits)
+                }
             }
             val text = if (c.countDown) formatDuration(value + 999) else formatDuration(value) + ",%d".format((value % 1000) / 100)
             Text(text, color = color, fontSize = 40.sp, style = Digits.copy(fontWeight = FontWeight.Normal), maxLines = 1, softWrap = false)

@@ -168,7 +168,12 @@ object NotificationParser {
             } else {
                 null
             }
-            clock && !ticking && call == null && !isMedia && ClockAction.START in buttons -> pausedFromText
+            clock && !ticking && call == null && !isMedia &&
+                ClockAction.START in buttons && ClockAction.PAUSE !in buttons ->
+                previousChrono?.pausedMs
+                    ?: previousChrono?.elapsed(System.currentTimeMillis())
+                    ?: pausedFromText
+                    ?: if (!looksLikeTimer(n, title)) (System.currentTimeMillis() - n.`when`).coerceAtLeast(0) else null
             clock && titlePaused ->
                 previousChrono?.pausedMs ?: previousChrono?.elapsed(System.currentTimeMillis()) ?: pausedFromText
             else -> null
