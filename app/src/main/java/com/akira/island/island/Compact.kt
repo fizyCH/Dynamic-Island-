@@ -735,6 +735,7 @@ private fun ReplyField(action: MsgAction, accent: Color, onSend: (String) -> Uni
         RoundButton(
             Ios.arrowUp, size = 40.dp,
             bg = if (ready) accent else accent.copy(alpha = 0.35f), fg = onAccent(accent), iconScale = 0.5f,
+            glass = false,
         ) { onSend(text) }
     }
 }
@@ -916,11 +917,11 @@ private fun IncomingCall(c: CallInfo, s: IslandSettings, wideWidth: Dp) {
                 overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
-        RoundButton(Ios.call, size = 46.dp, bg = Tints.Red, iconScale = 0.52f, iconRotation = 135f) {
+        RoundButton(Ios.call, size = 46.dp, bg = Tints.Red, iconScale = 0.52f, iconRotation = 135f, glass = false) {
             Controls.endCall(context, c)
         }
         Spacer(Modifier.width(11.dp))
-        RoundButton(Ios.call, pulse, size = 46.dp, bg = Tints.Green, iconScale = 0.52f) {
+        RoundButton(Ios.call, pulse, size = 46.dp, bg = Tints.Green, iconScale = 0.52f, glass = false) {
             Controls.answerCall(context, c)
         }
     }

@@ -7,10 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.PixelFormat
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -56,7 +52,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -99,18 +94,6 @@ class IslandService : AccessibilityService() {
     private var replySince = 0L
     private var imePackages: Set<String> = emptySet()
     private var imeCheckedAt = 0L
-
-    private var tiltOn = false
-    private var tiltSmooth = 0f
-    private val tiltListener = object : SensorEventListener {
-        override fun onSensorChanged(e: SensorEvent) {
-            // Наклон влево-вправо от -1 до 1; сглаживаем, чтобы блик плыл, а не дрожал
-            tiltSmooth += (e.values[0] / 9.81f).coerceIn(-1f, 1f).minus(tiltSmooth) * 0.12f
-            if (abs(tiltSmooth - IslandBus.glassTilt.value) > 0.015f) IslandBus.glassTilt.value = tiltSmooth
-        }
-
-        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-    }
 
     private var visible = true
     private var body = Rect.Zero
@@ -244,13 +227,6 @@ class IslandService : AccessibilityService() {
         }
         // Телефон заблокировали — отвечать с экрана блокировки нельзя
         scope.launch { IslandBus.locked.collect { if (it) IslandBus.reply.value = null } }
-
-        // Liquid Glass: блики сдвигаются при наклоне телефона, датчик слушаем только пока стекло включено и экран горит
-        scope.launch {
-            combine(SettingsRepo.state.map { it.liquidGlass && it.enabled }, IslandBus.screenOn) { glass, on -> glass && on }
-                .distinctUntilChanged()
-                .collect { setTiltEnabled(it) }
-        }
 
         scope.launch {
             combine(SettingsRepo.state, IslandBus.landscape, IslandBus.offSchedule) { s, land, _ -> s to land }
@@ -542,20 +518,6 @@ class IslandService : AccessibilityService() {
         runCatching { wm?.updateViewLayout(view, touchParams) }
     }
 
-    private fun setTiltEnabled(on: Boolean) {
-        if (on == tiltOn) return
-        tiltOn = on
-        val sm = getSystemService(SensorManager::class.java) ?: return
-        if (on) {
-            val sensor = sm.getDefaultSensor(Sensor.TYPE_GRAVITY) ?: sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-            sm.registerListener(tiltListener, sensor, SensorManager.SENSOR_DELAY_UI)
-        } else {
-            sm.unregisterListener(tiltListener)
-            tiltSmooth = 0f
-            IslandBus.glassTilt.value = 0f
-        }
-    }
-
     private fun setInputFocus(on: Boolean) {
         val view = display ?: return
         val flag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -719,7 +681,6 @@ class IslandService : AccessibilityService() {
         handler.removeCallbacks(screenToneSample)
         ScreenTone.clear()
         IslandBus.egg.value = false
-        setTiltEnabled(false)
         IslandBus.serviceRunning.value = false
         IslandTile.refresh(this)
         events?.stop()

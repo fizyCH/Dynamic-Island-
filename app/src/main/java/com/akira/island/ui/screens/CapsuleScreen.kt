@@ -80,14 +80,14 @@ fun CapsuleScreen(open: (Screen) -> Unit) {
             GroupItem(Pos.First, Icons.Rounded.FormatColorFill, tr("Цвет капсулы", "Capsule color"), tr("Цвет, контур и тень", "Color, outline and shadow"),
                 color = Tile.Orange, onClick = { open(Screen.COLORS) }) { Arrow() }
             GroupToggle(
-                if (s.liquidGlass) Pos.Middle else Pos.Last, Icons.Rounded.WaterDrop, "Liquid Glass",
-                tr("Стекло с бликами и сияющей кромкой, как в iOS. Блики двигаются при наклоне",
-                    "Glass with highlights and a glowing edge, like in iOS. Highlights move when you tilt the phone"),
-                s.liquidGlass, color = Tile.Teal, badge = tr("Экспериментальный", "Experimental"),
+                if (s.liquidGlass) Pos.Middle else Pos.Last, Icons.Rounded.WaterDrop, tr("Liquid Glass кнопок", "Button Liquid Glass"),
+                tr("Стеклянные кнопки плеера и быстрых действий, как в iOS 26. Кнопки звонка остаются красной и зелёной",
+                    "Glass player and quick-action buttons, like iOS 26. Call buttons stay red and green"),
+                s.liquidGlass, color = Tile.Teal, badge = tr("Новое", "New"),
             ) { v -> SettingsRepo.update { copy(liquidGlass = v) } }
             if (s.liquidGlass) {
                 GroupSlider(
-                    Pos.Last, Icons.Rounded.Opacity, tr("Плотность стекла", "Glass density"),
+                    Pos.Last, Icons.Rounded.Opacity, tr("Плотность стекла кнопок", "Button glass density"),
                     value = s.glassOpacity.toFloat(), range = 40f..95f, label = "${s.glassOpacity}%", color = Tile.Teal,
                 ) { v -> SettingsRepo.update { copy(glassOpacity = v.toInt()) } }
             }

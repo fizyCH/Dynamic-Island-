@@ -1,5 +1,6 @@
 package com.akira.island.island
 
+import android.os.Build
 import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
@@ -47,14 +48,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
@@ -80,6 +80,14 @@ import com.akira.island.data.AccentMode
 import com.akira.island.data.ExpandStyle
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import com.akira.island.core.IslandBus
@@ -316,6 +324,7 @@ fun RoundButton(
     fg: Color = Color.White,
     iconScale: Float = 0.52f,
     iconRotation: Float = 0f,
+    glass: Boolean = true,
     onClick: () -> Unit,
 ) {
     val haptic = rememberHaptic()
@@ -323,6 +332,16 @@ fun RoundButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "press")
+    val surface = if (glass) {
+        Modifier.iosGlassButton(
+            CircleShape,
+            bg,
+            SettingsRepo.current.glassOpacity / 100f,
+            small = size <= 36.dp,
+        )
+    } else {
+        Modifier.clip(CircleShape).background(bg)
+    }
     Box(
         modifier
             .size(size)
@@ -330,8 +349,7 @@ fun RoundButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(CircleShape)
-            .background(bg)
+            .then(surface)
             .clickable(interaction, indication = null) { haptic(); onClick() },
         contentAlignment = Alignment.Center,
     ) {
@@ -346,14 +364,26 @@ fun PillButton(
     modifier: Modifier = Modifier,
     bg: Color = Color.White.copy(alpha = 0.14f),
     fg: Color = Color.White,
+    glass: Boolean = true,
     onClick: () -> Unit,
 ) {
     val haptic = rememberHaptic()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "pillPress")
+    val surface = if (glass) {
+        Modifier.iosGlassButton(CircleShape, bg, SettingsRepo.current.glassOpacity / 100f)
+    } else {
+        Modifier.clip(CircleShape).background(bg)
+    }
     Row(
         modifier
-            .clip(CircleShape)
-            .background(bg)
-            .clickable { haptic(); onClick() }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(surface)
+            .clickable(interaction, indication = null) { haptic(); onClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -364,102 +394,105 @@ fun PillButton(
 }
 
 /**
- * Liquid Glass по образцу iOS 26: стекло, которое ловит и преломляет свет. Настоящего преломления
- * того, что лежит под островом, Android не даёт (поверх экрана нельзя «заглянуть» в чужое окно),
- * поэтому рисуется всё, что видно у настоящего стекла:
- *  - дымчатое полупрозрачное тело, светлее чёрной подложки, плотнее и темнее к низу (толщина);
- *  - пятно света сверху и каустика — светлое пятно у противоположного края, где свет собрало стекло;
- *  - мягкое свечение вдоль кромки и яркая линза-кромка: блики в верхнем левом и нижнем правом углу;
- *  - тонкая цветная дисперсия по краю (голубая и розовая каймы);
- *  - блики живут: при наклоне телефона ([tilt] от −1 до 1) они сдвигаются, а при смене содержимого
- *    по стеклу пробегает световая полоса ([sheen] от 0 до 1, иначе скрыта).
+ * Liquid Glass только для кнопок — материал из библиотеки Kyant0/AndroidLiquidGlass.
+ *
+ * Эффект blur/lens работает с тем слоем, который ему передали. Поверх чужого окна Android
+ * не даёт прочитать wallpaper, поэтому под кнопкой рисуется её собственный слой: цвет корпуса
+ * острова с мягким верхним светом и тенью. Линза преломляет этот слой, а не чёрную заливку —
+ * так кнопка выглядит стеклянной и на сплошной капсуле.
  */
-fun Modifier.glassSurface(
+@Composable
+private fun Modifier.iosGlassButton(
     shape: Shape,
-    base: Color,
+    bg: Color,
     opacity: Float,
-    tilt: () -> Float = { 0f },
-    sheen: () -> Float = { -1f },
-): Modifier = drawWithCache {
-    val w = size.width
-    val h = size.height
-    val a = opacity.coerceIn(0.3f, 0.95f)
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val dp = 1.dp.toPx()
-    // Всё, что не зависит от наклона, собирается один раз на размер, а кадр только рисует
-    val veil = Brush.verticalGradient(
-        0f to Color.White.copy(alpha = 0.20f),
-        0.5f to Color.White.copy(alpha = 0.05f),
-        1f to Color.White.copy(alpha = 0.10f),
-    )
-    val shade = Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.28f))
-    val glow = List(7) { i -> Stroke(width = (i + 1) * 2 * dp) }
-    val glowColor = Color.White.copy(alpha = 0.035f)
-    val wideRim = Stroke(width = 10 * dp)
-    val thinRim = Stroke(width = 3.2f * dp)
-    val fringe = Stroke(width = 4 * dp)
+    small: Boolean = false,
+): Modifier {
+    val s = SettingsRepo.current
+    if (!s.liquidGlass || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return clip(shape).background(bg)
+    }
 
-    onDrawWithContent {
-        val t = tilt().coerceIn(-1f, 1f)
-
-        // Тело стекла
-        drawRect(base.copy(alpha = a * 0.8f))
-        drawRect(veil)
-        drawRect(shade)
-
-        // Свет сверху и каустика у противоположного края
-        drawRect(
-            Brush.radialGradient(
-                listOf(Color.White.copy(alpha = 0.26f), Color.Transparent),
-                center = Offset(w * (0.22f + 0.30f * t), 0f),
-                radius = w * 0.55f,
-            ),
-        )
-        drawRect(
-            Brush.radialGradient(
-                listOf(Color.White.copy(alpha = 0.20f), Color.Transparent),
-                center = Offset(w * (0.80f + 0.15f * t), h),
-                radius = w * 0.45f,
-            ),
-        )
-
-        // Бегущий блик при смене содержимого
-        val shine = sheen()
-        if (shine in 0f..1f) {
-            val x = -w * 0.3f + w * 1.6f * shine
+    // У сплошной цветной кнопки стекло должно остаться цветным: подложка — сам цвет кнопки.
+    // У полупрозрачной нейтральной — цвет корпуса острова.
+    val base = if (bg.alpha > 0.95f) bg else Color(s.color)
+    val tint = glassTint(bg)
+    val strength = ((opacity.coerceIn(0.4f, 0.95f) - 0.4f) / 0.55f).coerceIn(0f, 1f)
+    val onDraw: DrawScope.() -> Unit = remember(base, tint) {
+        {
+            val light = (tint?.copy(alpha = 0.18f) ?: Color.White.copy(alpha = 0.14f)).compositeOver(base)
+            val dark = Color.Black.copy(alpha = 0.20f).compositeOver(base)
             drawRect(
-                Brush.linearGradient(
-                    0f to Color.Transparent,
-                    0.5f to Color.White.copy(alpha = 0.24f),
-                    1f to Color.Transparent,
-                    start = Offset(x - w * 0.25f, 0f),
-                    end = Offset(x + w * 0.25f, h * 0.6f),
+                Brush.verticalGradient(
+                    0f to light,
+                    0.42f to base,
+                    1f to dark,
                 ),
             )
+            // Цветное стекло: тонкий цветной градиент по диагонали, чтобы линза ловила оттенок
+            if (tint != null) {
+                drawRect(
+                    Brush.linearGradient(
+                        0f to tint.copy(alpha = 0.24f),
+                        0.55f to Color.Transparent,
+                        1f to tint.copy(alpha = 0.10f),
+                    ),
+                )
+            }
         }
-
-        // Свечение вдоль кромки: полоски убывающей яркости складываются в плавный спад внутрь
-        for (stroke in glow) drawOutline(outline, glowColor, style = stroke)
-
-        drawContent()
-
-        // Кромка-линза: яркая слева сверху и справа снизу, посередине почти гаснет; при наклоне сдвигается
-        val shift = t * w * 0.35f
-        val rim = Brush.linearGradient(
-            0f to Color.White.copy(alpha = 0.95f),
-            0.18f to Color.White.copy(alpha = 0.35f),
-            0.45f to Color.White.copy(alpha = 0.06f),
-            0.72f to Color.White.copy(alpha = 0.22f),
-            1f to Color(0xFFD6E8FF).copy(alpha = 0.9f),
-            start = Offset(-shift, 0f),
-            end = Offset(w - shift, h),
-        )
-        drawOutline(outline, rim, alpha = 0.35f, style = wideRim)
-        drawOutline(outline, rim, style = thinRim)
-        // Дисперсия: свет раскладывается на цвета по краям
-        translate(-dp, -dp) { drawOutline(outline, Color(0xFF7DF9FF).copy(alpha = 0.20f), style = fringe) }
-        translate(dp, dp) { drawOutline(outline, Color(0xFFFF8AD8).copy(alpha = 0.18f), style = fringe) }
     }
+    val backdrop = rememberCanvasBackdrop(onDraw)
+    val veil = if (tint != null) {
+        tint.copy(alpha = 0.12f + 0.18f * strength)
+    } else {
+        Color.White.copy(alpha = 0.07f + 0.08f * strength)
+    }
+
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            vibrancy()
+            blur((if (small) 2f else 3f).dp.toPx())
+            lens(
+                (if (small) 8f else 11f).dp.toPx(),
+                (if (small) 16f else 24f).dp.toPx(),
+                depthEffect = true,
+            )
+        },
+        shadow = {
+            Shadow(
+                radius = if (small) 5.dp else 7.dp,
+                offset = DpOffset(0.dp, 2.dp),
+                color = Color.Black.copy(alpha = 0.22f),
+            )
+        },
+        innerShadow = {
+            InnerShadow(
+                radius = if (small) 3.dp else 5.dp,
+                offset = DpOffset(0.dp, 2.dp),
+                color = Color.Black.copy(alpha = 0.16f),
+            )
+        },
+        onDrawSurface = {
+            drawRect(veil)
+            // Верхний блик — мягкий, без «мыльной» плёнки на всей кнопке
+            drawRect(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0.10f + 0.06f * strength),
+                    0.48f to Color.Transparent,
+                ),
+            )
+        },
+    )
+}
+
+/** Тинт для стеклянной кнопки: прозрачный или серый фон — нейтральное стекло, цветной — тонированное. */
+private fun glassTint(bg: Color): Color? {
+    if (bg.alpha < 0.02f) return null
+    val chroma = maxOf(bg.red, bg.green, bg.blue) - minOf(bg.red, bg.green, bg.blue)
+    if (bg.alpha < 0.5f && chroma < 0.08f) return null
+    return if (bg.alpha > 0.95f) bg.copy(alpha = 0.32f) else bg.copy(alpha = bg.alpha.coerceAtLeast(0.16f))
 }
 
 /**

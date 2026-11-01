@@ -86,8 +86,8 @@ import com.akira.island.data.WallpaperTone
 import com.akira.island.island.Act
 import com.akira.island.island.CompactContent
 import com.akira.island.island.Ios
+import com.akira.island.island.RoundButton
 import com.akira.island.island.activeHeight
-import com.akira.island.island.glassSurface
 import com.akira.island.island.islandGlow
 import com.akira.island.island.islandShape
 import com.akira.island.island.rememberHaptic
@@ -550,10 +550,7 @@ fun IslandPreview(expanded: Boolean = false) {
                 // «Свечение обложки» видно и на примере
                 .then(if (!expanded && s.fxGlow && !s.reduceEffects) Modifier.drawBehind { islandGlow(demo.accent, 1f, corner.toPx(), s.notch) } else Modifier)
                 .clip(shape)
-                .then(
-                    if (s.liquidGlass) Modifier.glassSurface(shape, Color(s.color), s.glassOpacity / 100f)
-                    else Modifier.background(Color(s.color)),
-                )
+                .background(Color(s.color))
                 .then(
                     when {
                         s.outline -> Modifier.border(s.outlineWidth.dp, if (s.outlineFromArt) Tints.Lavender else Color(s.outlineColor), shape)
@@ -565,6 +562,18 @@ fun IslandPreview(expanded: Boolean = false) {
                 .animateContentSize(),
         ) {
             CompactContent(act, s, 400.dp)
+        }
+        // Пример самих стеклянных кнопок: капсула остаётся сплошной, стекло — только на кнопках
+        if (s.liquidGlass && !expanded) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RoundButton(Ios.back, size = 32.dp, bg = Color.Transparent, iconScale = 0.62f) {}
+                RoundButton(Ios.play, size = 40.dp, bg = Color.Transparent, iconScale = 0.62f) {}
+                RoundButton(Ios.forward, size = 32.dp, bg = Color.Transparent, iconScale = 0.62f) {}
+            }
         }
     }
 }

@@ -6,6 +6,14 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.17] — 2026-11-01
+
+- 💧 **Liquid Glass is now on the buttons only** — like iOS 26: glass player, timer, stopwatch and quick-action buttons, while the capsule, bubble and background stay solid.
+- 🎨 **Colored buttons become tinted glass**: the timer and flashlight keep their color, while neutral buttons look like clear glass with a soft top highlight and a lensed edge.
+- 📞 **Call buttons stay solid**: Answer is green and Decline is red, with no glass.
+- ⚙️ **Button glass density** in Appearance → Color and glass controls how strong the glass buttons look.
+- 🧩 The effect is powered by [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache 2.0).
+
 ## [1.6.5] — 2026-10-28
 
 - 🎬 **Liquid expansion** — new in Appearance → Animations: the content grows together with the island and emerges from a blur; duration and bounce follow your settings.

@@ -13,8 +13,8 @@ android {
         applicationId = "com.akira.island"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "1.6.16"
+        versionCode = 24
+        versionName = "1.6.17"
     }
 
     // Ключ подписи в репозитории не хранится: релизный APK собирается без подписи,
@@ -38,10 +38,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Lint из AGP 8.7 ещё не понимает метаданные Kotlin 2.2: его детектор LiveData падает
+    // на собственном IncompatibleClassChangeError. Остальные проверки release-сборки остаются.
+    lint {
+        disable += "NullSafeMutableLiveData"
+    }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.10.01")
     implementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.15.0")
@@ -51,6 +57,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("io.github.kyant0:backdrop:1.0.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

@@ -515,16 +515,6 @@ private fun IslandBody(
     // Оттягивание вниз пальцем
     val pull = remember { Animatable(0f) }
 
-    // Liquid Glass: при смене содержимого по стеклу пробегает блик, при наклоне телефона блики сдвигаются
-    val tilt = IslandBus.glassTilt.collectAsState()
-    val sheen = remember { Animatable(-1f) }
-    LaunchedEffect(primary.id, expanded, s.liquidGlass) {
-        if (!s.liquidGlass || s.reduceEffects) return@LaunchedEffect
-        sheen.snapTo(0f)
-        sheen.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
-        sheen.snapTo(-1f)
-    }
-
     // Короткая пилюля (режим звука) вздрагивает вбок, как остров на iPhone при переключении «Звонок/Бесшумно»
     val shake = remember { Animatable(0f) }
     val pillId = (primary as? Act.NoticeA)?.n?.takeIf { it.style == NoticeStyle.PILL }?.id
@@ -554,22 +544,9 @@ private fun IslandBody(
             .graphicsLayer {
                 this.shape = islandShape(corner.value, s.notch)
                 clip = true
-                when {
-                    s.liquidGlass && !calibrating && !s.reduceEffects -> {
-                        shadowElevation = 10.dp.toPx()
-                        ambientShadowColor = Color.Black.copy(alpha = 0.5f)
-                        spotShadowColor = Color.Black.copy(alpha = 0.6f)
-                    }
-                    s.shadow && !s.reduceEffects -> shadowElevation = 10.dp.toPx()
-                }
+                if (s.shadow && !s.reduceEffects) shadowElevation = 10.dp.toPx()
             }
-            .then(
-                if (s.liquidGlass && !calibrating) {
-                    Modifier.glassSurface(shape, Color(s.color), s.glassOpacity / 100f, tilt = { tilt.value }) { sheen.value }
-                } else {
-                    Modifier.background(if (calibrating) CalibrationRed else Color(s.color))
-                },
-            )
+            .background(if (calibrating) CalibrationRed else Color(s.color))
             .then(
                 when {
                     calibrating -> Modifier.border(2.dp, Color.White, shape)
@@ -840,7 +817,6 @@ private fun perform(context: Context, action: TapAction, act: Act) {
 private fun Bubble(act: Act, s: IslandSettings) {
     val h = activeHeight(s)
     val haptic = rememberHaptic()
-    val tilt = IslandBus.glassTilt.collectAsState()
     val now = rememberNow(500, active = act is Act.TimerA)
     val darkWallpaper by WallpaperTone.dark.collectAsState()
     val darkScreen by ScreenTone.dark.collectAsState()
@@ -854,10 +830,7 @@ private fun Bubble(act: Act, s: IslandSettings) {
             .size(h)
             .then(if (s.shadow && !s.reduceEffects) Modifier.shadow(8.dp, CircleShape) else Modifier)
             .clip(CircleShape)
-            .then(
-                if (s.liquidGlass) Modifier.glassSurface(CircleShape, Color(s.color), s.glassOpacity / 100f, tilt = { tilt.value })
-                else Modifier.background(Color(s.color)),
-            )
+            .background(Color(s.color))
             .then(
                 when {
                     s.outline -> Modifier.border(s.outlineWidth.dp, Color(s.outlineColor), CircleShape)

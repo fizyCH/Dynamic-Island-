@@ -276,7 +276,7 @@ private fun CallExpanded(c: CallInfo) {
                 overflow = TextOverflow.Ellipsis)
             Text(formatDuration(now - c.base), color = Tints.Green, fontSize = 15.sp, style = Digits)
         }
-        RoundButton(Ios.call, size = 48.dp, bg = Tints.Red, iconScale = 0.46f, iconRotation = 135f) {
+        RoundButton(Ios.call, size = 48.dp, bg = Tints.Red, iconScale = 0.46f, iconRotation = 135f, glass = false) {
             Controls.endCall(context, c)
         }
     }
