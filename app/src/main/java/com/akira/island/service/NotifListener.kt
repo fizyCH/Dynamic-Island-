@@ -166,7 +166,15 @@ object NotificationParser {
                 } else {
                     null
                 }
-                val recPaused = recPrev != null && recResume != null && recPause == null
+                val recText = listOfNotNull(
+                    title,
+                    ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+                    ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+                ).joinToString(" ").lowercase()
+                val recPaused = recPrev != null && (
+                    recResume != null && recPause == null ||
+                        ("paused" in recText || "пауза" in recText || "приостанов" in recText)
+                    )
                 val nowWall = System.currentTimeMillis()
                 val base = when {
                     // При паузе диктофон иногда обновляет notification.when; не начинаем отсчёт с нуля.

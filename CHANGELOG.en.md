@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.20] — 2026-11-01
+
+- 🎙️ Voice-recorder sync refined: pause freezes the island time, and resume continues from the same point.
+- 🚩 Timer: a flag at the start, the close button appears only when paused; the island stays after pausing.
+- 🔴 Screen recording: a blinking dot in the capsule and the expanded island, with the screen-recording stop button kept.
+- 🛜 Hotspot shutdown removed from the island.
+
 ## [1.6.19] — 2026-11-01
 
 - 🛜 **Hotspot shutdown removed from the island** — the card still shows connected devices but no longer tries to turn tethering off.
