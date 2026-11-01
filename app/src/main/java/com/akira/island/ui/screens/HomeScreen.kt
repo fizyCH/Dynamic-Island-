@@ -36,17 +36,19 @@ import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Science
-import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,7 +69,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.akira.island.R
 import com.akira.island.core.AlarmInfo
 import com.akira.island.core.AppMessage
+import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
+import com.akira.island.core.HotspotInfo
 import com.akira.island.core.IslandBus
 import com.akira.island.core.MediaInfo
 import com.akira.island.core.MsgAction
@@ -77,6 +81,7 @@ import com.akira.island.core.PayReady
 import com.akira.island.core.Tints
 import com.akira.island.core.tr
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.WallpaperTone
 import com.akira.island.island.Act
 import com.akira.island.island.CompactContent
 import com.akira.island.island.Ios
@@ -86,6 +91,7 @@ import com.akira.island.island.islandGlow
 import com.akira.island.island.islandShape
 import com.akira.island.island.rememberHaptic
 import com.akira.island.service.NotificationParser
+import com.akira.island.service.ScreenTone
 import com.akira.island.service.SystemBanners
 import com.akira.island.ui.Group
 import com.akira.island.ui.GroupItem
@@ -99,8 +105,6 @@ import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
 import com.akira.island.ui.ToggleCard
 import com.akira.island.ui.Ui
-import com.akira.island.ui.UpdateSection
-import com.akira.island.update.UpdateChecker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -153,7 +157,6 @@ fun HomeScreen(open: (Screen) -> Unit) {
 
     Page(tr("Динамический остров", "Dynamic Island")) {
         IslandPreview()
-        UpdateSection()
 
         // Без службы спец. возможностей острова нет вовсе — это первый шаг
         if (!perms.accessibility) {
@@ -421,6 +424,34 @@ private fun demos(context: Context): List<Demo> = listOf(
     Demo(Icons.Rounded.HourglassBottom, tr("Таймер", "Timer"), tr("Обратный отсчёт одной минуты", "A one-minute countdown"), Tile.Orange) {
         Controls.startTimer(1)
     },
+    Demo(Icons.Rounded.Mic, tr("Запись", "Recording"),
+        tr("Красная волна, таймер и кнопка «Стоп»", "Red wave, timer and Stop"), Tile.Red) {
+        val key = "demo-recording"
+        val now = System.currentTimeMillis()
+        IslandBus.chrono.value = IslandBus.chrono.value + (key to ChronoInfo(
+            key = key,
+            pkg = context.packageName,
+            title = tr("Запись экрана", "Screen recording"),
+            icon = NotificationParser.icon(context, context.packageName),
+            base = now,
+            countDown = false,
+            postTime = now,
+            recording = true,
+        ))
+        IslandBus.scope.launch {
+            delay(6_000)
+            IslandBus.chrono.value = IslandBus.chrono.value - key
+        }
+    },
+    Demo(Icons.Rounded.WifiTethering, tr("Точка доступа", "Personal Hotspot"),
+        tr("Слева значок, справа число устройств", "Icon on the left, device count on the right"), Tile.Blue) {
+        val previous = IslandBus.hotspot.value
+        IslandBus.hotspot.value = HotspotInfo(1)
+        IslandBus.scope.launch {
+            delay(6_000)
+            if (IslandBus.hotspot.value?.clients == 1) IslandBus.hotspot.value = previous
+        }
+    },
     Demo(Icons.Rounded.Alarm, tr("Будильник", "Alarm"), tr("Время подъёма и сколько осталось спать", "Wake-up time and how long you can sleep"), Tile.Indigo) {
         IslandBus.post(
             Notice(
@@ -450,10 +481,6 @@ private fun demos(context: Context): List<Demo> = listOf(
     },
     Demo(Icons.Rounded.Navigation, tr("Навигатор", "Navigation"), tr("Стрелка поворота и метры до неё", "The turn arrow and meters to it"), Tile.Purple) {
         Controls.showTestLive(context)
-    },
-    Demo(Icons.Rounded.SystemUpdate, tr("Обновление", "Update"),
-        tr("Карточка новой версии: загрузка и «Обновлено»", "The new version card: download, then Updated"), Tile.Pink) {
-        UpdateChecker.showDemo(context)
     },
 )
 
@@ -486,6 +513,10 @@ fun Arrow() {
 @Composable
 fun IslandPreview(expanded: Boolean = false) {
     val s by SettingsRepo.state.collectAsState()
+    val context = LocalContext.current
+    val darkWallpaper by WallpaperTone.dark.collectAsState()
+    val darkScreen by ScreenTone.dark.collectAsState()
+    LaunchedEffect(Unit) { WallpaperTone.refresh(context) }
     val demo = remember {
         MediaInfo(
             key = "demo", pkg = "", title = tr("Демо", "Demo"), artist = "", album = null, art = null,
@@ -515,7 +546,14 @@ fun IslandPreview(expanded: Boolean = false) {
                     if (s.liquidGlass) Modifier.glassSurface(shape, Color(s.color), s.glassOpacity / 100f)
                     else Modifier.background(Color(s.color)),
                 )
-                .then(if (s.outline) Modifier.border(s.outlineWidth.dp, if (s.outlineFromArt) Tints.Lavender else Color(s.outlineColor), shape) else Modifier)
+                .then(
+                    when {
+                        s.outline -> Modifier.border(s.outlineWidth.dp, if (s.outlineFromArt) Tints.Lavender else Color(s.outlineColor), shape)
+                        s.autoOutlineOnScreen -> if (darkScreen) Modifier.border(1.dp, Tints.AutoOutline, shape) else Modifier
+                        s.autoOutlineOnDark && darkWallpaper -> Modifier.border(1.dp, Tints.AutoOutline, shape)
+                        else -> Modifier
+                    },
+                )
                 .animateContentSize(),
         ) {
             CompactContent(act, s, 400.dp)

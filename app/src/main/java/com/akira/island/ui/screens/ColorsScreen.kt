@@ -17,9 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BorderStyle
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.LineWeight
+import androidx.compose.material.icons.rounded.Screenshot
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,6 +80,27 @@ fun ColorsScreen(onBack: () -> Unit) {
             }
         }
         Swatches(outlineColors, s.outlineColor) { c -> SettingsRepo.update { copy(outlineColor = c, outline = true) } }
+
+        SectionHeader(tr("Автоматическая обводка", "Automatic outline"))
+        Group {
+            GroupToggle(Pos.First, Icons.Rounded.Screenshot, tr("По цвету на экране", "By screen color"),
+                tr("Считывает фон вокруг острова: тёмный — серая обводка, светлый — без обводки",
+                    "Samples the background around the island: dark adds a gray line, light leaves it off"),
+                s.autoOutlineOnScreen, color = Tile.Teal) { v ->
+                SettingsRepo.update { copy(autoOutlineOnScreen = v, autoOutlineOnDark = if (v) false else autoOutlineOnDark) }
+            }
+            GroupToggle(Pos.Last, Icons.Rounded.DarkMode, tr("По тёмным обоям", "By dark wallpaper"),
+                tr("Резервный вариант, если чтение цвета экрана выключено",
+                    "Fallback when screen color sampling is off"),
+                s.autoOutlineOnDark, color = Tile.Gray) { v ->
+                SettingsRepo.update { copy(autoOutlineOnDark = v, autoOutlineOnScreen = if (v) false else autoOutlineOnScreen) }
+            }
+        }
+        Text(
+            tr("Цвет считывается только вокруг острова; снимок не сохраняется и никуда не отправляется.",
+                "Only the area around the island is sampled; the screenshot is not saved or sent anywhere."),
+            color = Ui.Sub, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(horizontal = 8.dp),
+        )
 
         SectionHeader(tr("Тень", "Shadow"))
         GroupToggle(Pos.Single, Icons.Rounded.Layers, tr("Тень", "Shadow"),

@@ -1,6 +1,7 @@
 package com.akira.island.service
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
@@ -8,6 +9,7 @@ import android.os.SystemClock
 import android.provider.AlarmClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.RemoteViews
 import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
 import com.akira.island.core.IslandBus
@@ -41,18 +43,83 @@ object ClockApps {
         context.packageManager.queryIntentActivities(Intent(AlarmClock.ACTION_SET_TIMER), 0).map { it.activityInfo.packageName }
     }.getOrDefault(emptyList()) - context.packageName).also { found = it }
 
-    fun isClock(context: Context, pkg: String) = pkg in packages(context)
+    fun isClock(context: Context, pkg: String) =
+        pkg in packages(context) || pkg.contains("clock", ignoreCase = true)
 
     private var alarmApps: Set<String>? = null
 
     /** «Часы» и будильники (Alarmy, Sleep as Android…) — те, кто ставит будильники или показывает их список */
-    fun isAlarmApp(context: Context, pkg: String): Boolean = pkg in (alarmApps ?: (packages(context) +
-        listOf(AlarmClock.ACTION_SET_ALARM, AlarmClock.ACTION_SHOW_ALARMS).flatMap { action ->
-            runCatching {
-                @Suppress("DEPRECATION")
-                context.packageManager.queryIntentActivities(Intent(action), 0).map { it.activityInfo.packageName }
-            }.getOrDefault(emptyList())
-        }).also { alarmApps = it })
+    fun isAlarmApp(context: Context, pkg: String): Boolean =
+        pkg in (alarmApps ?: (packages(context) +
+            listOf(AlarmClock.ACTION_SET_ALARM, AlarmClock.ACTION_SHOW_ALARMS).flatMap { action ->
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.queryIntentActivities(Intent(action), 0).map { it.activityInfo.packageName }
+                }.getOrDefault(emptyList())
+            }).also { alarmApps = it }) || pkg.contains("clock", ignoreCase = true)
+}
+
+/**
+ * Таймер и секундомер из уведомления «Часов». Google Часы и AOSP рисуют время не стандартным
+ * chronometer-extra, а своим RemoteViews: в нём лежат обычные действия setBase/setStarted/setCountDown.
+ * Достаём их оттуда, чтобы таймер был виден, даже если «Часы» не открыты на экране.
+ */
+object ClockRemote {
+    data class Parsed(val base: Long, val countDown: Boolean, val running: Boolean) {
+        /** Сколько осталось/прошло, если таймер или секундомер стоит на паузе. */
+        fun pausedMs(now: Long): Long? = if (running) null else when {
+            countDown -> (base - now).coerceAtLeast(0)
+            else -> (now - base).coerceAtLeast(0)
+        }
+    }
+
+    fun parse(n: Notification): Parsed? {
+        val views = listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView)
+        for (rv in views) {
+            val parsed = parse(rv) ?: continue
+            return parsed
+        }
+        return null
+    }
+
+    private fun parse(rv: RemoteViews): Parsed? {
+        val actions = field(rv, "mActions", "actions") as? List<*> ?: return null
+        val chrono = HashMap<Int, Holder>()
+        for (action in actions) {
+            val a = action ?: continue
+            val id = field(a, "mViewId", "viewId") as? Int ?: continue
+            val method = field(a, "mMethodName", "methodName") as? String ?: continue
+            val value = field(a, "mValue", "value")
+            val h = chrono.getOrPut(id) { Holder() }
+            when (method) {
+                "setBase" -> if (value is Long) h.base = value
+                "setStarted" -> if (value is Boolean) h.started = value
+                "setCountDown" -> if (value is Boolean) h.countDown = value
+            }
+        }
+        val h = chrono.values.firstOrNull { it.base != null } ?: return null
+        val base = h.base ?: return null
+        val elapsedNow = SystemClock.elapsedRealtime()
+        return Parsed(
+            base = System.currentTimeMillis() + (base - elapsedNow),
+            countDown = h.countDown ?: false,
+            running = h.started ?: true,
+        )
+    }
+
+    private class Holder(var base: Long? = null, var countDown: Boolean? = null, var started: Boolean? = null)
+
+    private fun field(obj: Any, vararg names: String): Any? {
+        var c: Class<*>? = obj.javaClass
+        while (c != null) {
+            for (name in names) {
+                val f = runCatching { c.getDeclaredField(name).apply { isAccessible = true } }.getOrNull() ?: continue
+                return runCatching { f.get(obj) }.getOrNull()
+            }
+            c = c.superclass
+        }
+        return null
+    }
 }
 
 /** Что делает кнопка «Часов». */

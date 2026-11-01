@@ -38,11 +38,11 @@ import com.akira.island.R
 import com.akira.island.core.LangScope
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.WallpaperTone
 import com.akira.island.island.Egg
 import com.akira.island.island.ISLAND_PAD_DP
 import com.akira.island.island.IslandOverlay
 import com.akira.island.ui.InterTypography
-import com.akira.island.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -137,6 +137,8 @@ class IslandService : AccessibilityService() {
         fxTall = false
         updateDisplayHeight()
     }
+    /** Замер цвета фона вокруг острова для автоматической обводки */
+    private val screenToneSample = Runnable { sampleScreenTone() }
 
     private val displayParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
@@ -175,6 +177,7 @@ class IslandService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         SettingsRepo.init(this)
+        WallpaperTone.start(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         IslandBus.landscape.value = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -230,19 +233,16 @@ class IslandService : AccessibilityService() {
                 if (!it) {
                     keyguardShown = true
                     PayMonitor.clearReady()
+                } else {
+                    // Обои могли смениться, пока система не отдала цвета; проверяем ещё раз при включении экрана
+                    WallpaperTone.refresh(this@IslandService)
+                    // И сразу обновляем цвет фона вокруг острова
+                    scheduleScreenTone()
                 }
             }
         }
         // Телефон заблокировали — отвечать с экрана блокировки нельзя
         scope.launch { IslandBus.locked.collect { if (it) IslandBus.reply.value = null } }
-
-        // Новая версия на GitHub: проверка сама ограничена разом в 3 часа, здесь только будим её
-        scope.launch {
-            while (isActive) {
-                if (IslandBus.screenOn.value) UpdateChecker.check(this@IslandService, force = false, announce = true)
-                delay(60 * 60 * 1000L)
-            }
-        }
 
         // Liquid Glass: блики сдвигаются при наклоне телефона, датчик слушаем только пока стекло включено и экран горит
         scope.launch {
@@ -254,6 +254,15 @@ class IslandService : AccessibilityService() {
         scope.launch {
             combine(SettingsRepo.state, IslandBus.landscape, IslandBus.offSchedule) { s, land, _ -> s to land }
                 .collect { (s, land) -> applySettings(s, land) }
+        }
+
+        // Автообводка по цвету экрана: пока настройка включена, раз в 2 секунды проверяем фон вокруг острова
+        scope.launch {
+            while (isActive) {
+                if (SettingsRepo.current.autoOutlineOnScreen && IslandBus.screenOn.value) sampleScreenTone()
+                else ScreenTone.clear()
+                delay(2_000)
+            }
         }
 
         // «По расписанию»: проверяем ровно на границах часов и со включением экрана (пока телефон спит, ожидание стоит)
@@ -273,16 +282,6 @@ class IslandService : AccessibilityService() {
                         delay(next.timeInMillis - now.timeInMillis + 500)
                     }
                 }
-        }
-
-        // Обновились — один раз карточка «Обновлено», как в ролике (первая установка молчит)
-        val version = UpdateChecker.currentVersion(this)
-        val seen = SettingsRepo.current.islandVersion
-        if (seen != version) {
-            if (seen.isNotEmpty() && SettingsRepo.current.autoUpdateCheck) {
-                IslandBus.post(UpdateChecker.updatedNotice(this, version))
-            }
-            SettingsRepo.update { copy(islandVersion = version) }
         }
 
         // Пасхалка: та самая песня играет — окно острова высокое, пока горят эффекты, и ещё чуть-чуть, пока гаснут
@@ -379,6 +378,7 @@ class IslandService : AccessibilityService() {
             display?.let { v -> runCatching { wm?.updateViewLayout(v, displayParams) } }
         }
         updateTouchWindow()
+        if (!s.autoOutlineOnScreen || !visible) ScreenTone.clear() else scheduleScreenTone()
     }
 
     /**
@@ -418,7 +418,62 @@ class IslandService : AccessibilityService() {
             tall = true
             updateDisplayHeight()
         }
+        if (SettingsRepo.current.autoOutlineOnScreen) scheduleScreenTone()
         scheduleSettle()
+    }
+
+    /** Пересчитать цвет фона вокруг острова после того, как он перестал двигаться. */
+    private fun scheduleScreenTone() {
+        if (!SettingsRepo.current.autoOutlineOnScreen) {
+            ScreenTone.clear()
+            return
+        }
+        handler.removeCallbacks(screenToneSample)
+        handler.postDelayed(screenToneSample, 300)
+    }
+
+    private fun sampleScreenTone() {
+        if (!SettingsRepo.current.autoOutlineOnScreen || !IslandBus.screenOn.value) {
+            ScreenTone.clear()
+            return
+        }
+        val regions = screenToneRegions()
+        if (regions.isNotEmpty()) ScreenTone.sample(this, regions)
+    }
+
+    /**
+     * Полоски фона вокруг острова в координатах экрана: под ним и по бокам. Внутрь острова
+     * и его тени не заходим, иначе чёрная капсула всегда считалась бы тёмным фоном.
+     */
+    private fun screenToneRegions(): List<Rect> {
+        val view = display ?: return emptyList()
+        if (body.isEmpty && bubble.isEmpty) return emptyList()
+        val origin = IntArray(2)
+        view.getLocationOnScreen(origin)
+        val ox = origin[0].toFloat()
+        val oy = origin[1].toFloat()
+        fun shifted(r: Rect) = Rect(r.left + ox, r.top + oy, r.right + ox, r.bottom + oy)
+        val b = if (body.isEmpty) null else shifted(body)
+        val u = if (bubble.isEmpty) null else shifted(bubble)
+        val area = when {
+            b == null -> u ?: return emptyList()
+            u == null -> b
+            else -> Rect(minOf(b.left, u.left), minOf(b.top, u.top), maxOf(b.right, u.right), maxOf(b.bottom, u.bottom))
+        }
+        val screenW = resources.displayMetrics.widthPixels.toFloat()
+        val screenH = resources.displayMetrics.heightPixels.toFloat()
+        val gap = dp(18).toFloat()
+        val band = dp(14).toFloat()
+        val side = dp(10).toFloat()
+        val out = ArrayList<Rect>(3)
+        val belowTop = area.bottom + gap
+        val belowBottom = (belowTop + band).coerceAtMost(screenH)
+        if (belowBottom - belowTop >= dp(6)) out += Rect(area.left, belowTop, area.right, belowBottom)
+        val leftEdge = area.left - gap
+        if (leftEdge - side >= 0f) out += Rect((leftEdge - side).coerceAtLeast(0f), area.top, leftEdge, area.bottom)
+        val rightEdge = area.right + gap
+        if (rightEdge + side <= screenW) out += Rect(rightEdge, area.top, (rightEdge + side).coerceAtMost(screenW), area.bottom)
+        return out
     }
 
     private fun scheduleSettle() {
@@ -534,8 +589,14 @@ class IslandService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         when (event?.eventType) {
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> onWindowsChanged()
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> onWindowState(event)
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                onWindowsChanged()
+                if (SettingsRepo.current.autoOutlineOnScreen) scheduleScreenTone()
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                onWindowState(event)
+                if (SettingsRepo.current.autoOutlineOnScreen) scheduleScreenTone()
+            }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 clockReader?.onContentChanged(event)
                 payReader?.onContentChanged(event)
@@ -636,6 +697,8 @@ class IslandService : AccessibilityService() {
         handler.removeCallbacks(settle)
         handler.removeCallbacks(fxSettle)
         handler.removeCallbacks(touchUpdate)
+        handler.removeCallbacks(screenToneSample)
+        ScreenTone.clear()
         IslandBus.egg.value = false
         setTiltEnabled(false)
         IslandBus.serviceRunning.value = false
@@ -649,6 +712,7 @@ class IslandService : AccessibilityService() {
         payReader?.stop()
         ClockControl.reader = null
         alarmMonitor?.stop()
+        WallpaperTone.stop(this)
         scope.cancel()
         touch?.let { runCatching { wm?.removeView(it) } }
         display?.let { runCatching { wm?.removeView(it) } }

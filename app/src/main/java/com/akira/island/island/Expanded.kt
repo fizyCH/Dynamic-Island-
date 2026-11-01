@@ -57,9 +57,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.HeartBroken
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Screenshot
 import androidx.compose.material3.Icon
@@ -91,6 +94,7 @@ import com.akira.island.core.BatteryInfo
 import com.akira.island.core.CallInfo
 import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
+import com.akira.island.core.HotspotInfo
 import com.akira.island.core.IslandBus
 import com.akira.island.core.Lang
 import com.akira.island.core.LiveInfo
@@ -133,6 +137,7 @@ fun ExpandedContent(act: Act, s: IslandSettings, lyrics: Lyrics?, battery: Batte
             is Act.ChronoA -> ChronoExpanded(act.c)
             is Act.ProgressA -> ProgressExpanded(act.p)
             is Act.ChargingA -> ChargingExpanded(act.b)
+            is Act.HotspotA -> HotspotExpanded(act.h)
             is Act.LiveA -> LiveExpanded(act.l)
             is Act.CallA -> CallExpanded(act.c)
             is Act.AlarmA -> AlarmExpanded(act.a, s)
@@ -199,7 +204,7 @@ private fun MediaExpanded(m: MediaInfo, s: IslandSettings, lyrics: Lyrics?) {
                 modifier = Modifier.width(38.dp),
             )
         }
-        MediaControls(m.like, m.dislike, m.playing)
+        MediaControls(m.like, m.dislike, m.repeat, m.playing)
     }
 }
 
@@ -208,32 +213,46 @@ private fun MediaExpanded(m: MediaInfo, s: IslandSettings, lyrics: Lyrics?) {
  * а кнопки при этом не перерисовываются.
  */
 @Composable
-private fun MediaControls(like: PlayerAction?, dislike: PlayerAction?, playing: Boolean) {
+private fun MediaControls(like: PlayerAction?, dislike: PlayerAction?, repeat: PlayerAction?, playing: Boolean) {
     val context = LocalContext.current
     // Значки 28, 32 и 28, кнопки чуть больше значков — под палец
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // «Нравится» и «Не нравится», если плеер их даёт (Яндекс Музыка и др.)
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            like?.let { a ->
-                RoundButton(if (a.on) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, size = 30.dp, bg = Color.Transparent,
-                    fg = if (a.on) Tints.Red else Dim, iconScale = 0.66f) { Controls.playerAction(a.action) }
-            }
-            dislike?.let { a ->
-                RoundButton(Icons.Rounded.HeartBroken, size = 30.dp, bg = Color.Transparent, fg = Dim, iconScale = 0.62f) {
-                    Controls.playerAction(a.action)
-                }
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // «Не нравится», если плеер её даёт. «Нравится» стоит у кнопки назад — как в MusicFind
+        dislike?.let { a ->
+            RoundButton(Icons.Rounded.HeartBroken, size = 30.dp, bg = Color.Transparent, fg = Dim, iconScale = 0.62f) {
+                Controls.playerAction(a.action)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(Ios.back, size = 44.dp, bg = Color.Transparent, iconScale = 0.636f) { Controls.prev() }
-            RoundButton(if (playing) Ios.pause else Ios.play, size = 48.dp, bg = Color.Transparent, iconScale = 0.667f) {
-                Controls.playPause()
-            }
-            RoundButton(Ios.forward, size = 44.dp, bg = Color.Transparent, iconScale = 0.636f) { Controls.next() }
+        like?.let { a ->
+            RoundButton(
+                if (a.on) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                size = 32.dp, bg = Color.Transparent,
+                fg = if (a.on) Tints.Red else Dim, iconScale = 0.68f,
+            ) { Controls.playerAction(a.action) }
+        }
+        RoundButton(Ios.back, size = 40.dp, bg = Color.Transparent, iconScale = 0.636f) { Controls.prev() }
+        RoundButton(if (playing) Ios.pause else Ios.play, size = 44.dp, bg = Color.Transparent, iconScale = 0.667f) {
+            Controls.playPause()
+        }
+        RoundButton(Ios.forward, size = 40.dp, bg = Color.Transparent, iconScale = 0.636f) { Controls.next() }
+        repeat?.let { a ->
+            RoundButton(
+                when {
+                    !a.on -> Icons.Rounded.Close
+                    a.one -> MfPlayerIcons.RepeatOne
+                    else -> MfPlayerIcons.Repeat
+                },
+                size = 32.dp, bg = Color.Transparent,
+                fg = if (a.on) Tints.Lavender else Dim, iconScale = 0.68f,
+            ) { Controls.playerAction(a.action) }
         }
         // Вывод звука — как кнопка AirPlay
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            RoundButton(Ios.airplay, size = 36.dp, bg = Color.Transparent, fg = Dim, iconScale = 0.6f) { Controls.openOutput(context) }
+        RoundButton(Ios.airplay, size = 32.dp, bg = Color.Transparent, fg = Dim, iconScale = 0.6f) {
+            Controls.openOutput(context)
         }
     }
 }
@@ -643,6 +662,37 @@ private fun LiveExpanded(l: LiveInfo) {
                 Spacer(Modifier.width(6.dp))
                 Text(tr("Открыть", "Open"), color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
+        }
+    }
+}
+
+/** Активная точка доступа: значок, название и число подключённых устройств. */
+@Composable
+private fun HotspotExpanded(info: HotspotInfo) {
+    val context = LocalContext.current
+    val haptic = rememberHaptic()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(52.dp).clip(CircleShape).background(Tints.Blue.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.WifiTethering, null, tint = Tints.Blue, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(tr("Точка доступа", "Personal Hotspot"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(info.clientsText, color = Tints.Blue, fontSize = 15.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        RoundButton(
+            Icons.Rounded.PowerSettingsNew,
+            size = 44.dp,
+            bg = Tints.Red.copy(alpha = 0.2f),
+            fg = Tints.Red,
+            iconScale = 0.55f,
+        ) {
+            haptic()
+            if (!Controls.send(context, info.stop)) Controls.openHotspotSettings(context)
         }
     }
 }

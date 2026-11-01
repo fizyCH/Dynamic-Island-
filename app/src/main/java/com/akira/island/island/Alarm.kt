@@ -1,6 +1,7 @@
 package com.akira.island.island
 
 import android.content.Context
+import android.provider.AlarmClock
 import android.text.format.DateFormat
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
@@ -140,8 +141,19 @@ private fun dayAngle(t: Long): Float {
 fun openAlarm(context: Context, a: AlarmInfo) {
     if (Controls.send(context, a.show)) {
         Controls.collapse()
-    } else {
-        a.pkg?.let { Controls.openApp(context, it) }
+        return
+    }
+    val pkg = a.pkg
+    if (pkg != null) {
+        Controls.openApp(context, pkg)
+        return
+    }
+    // showIntent не отдали (Android 14+) — открываем список будильников «Часов»
+    runCatching {
+        context.startActivity(
+            android.content.Intent(AlarmClock.ACTION_SHOW_ALARMS)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,6 +91,7 @@ import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import com.akira.island.core.AppMessage
 import com.akira.island.core.CallInfo
+import com.akira.island.core.HotspotInfo
 import com.akira.island.core.Controls
 import com.akira.island.core.IslandBus
 import com.akira.island.core.LiveInfo
@@ -243,6 +245,8 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
             },
         )
 
+        is Act.HotspotA -> HotspotCompact(act.h, s)
+
         is Act.LiveA -> LiveCompact(act.l, s)
 
         is Act.AlarmA -> AlarmCompact(act.a, s)
@@ -257,6 +261,21 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
 @Composable
 private fun TimeText(text: String, color: Color, size: Int = 16, weight: FontWeight = FontWeight.SemiBold) {
     Text(text, color = color, fontSize = size.sp, style = Digits.copy(fontWeight = weight), maxLines = 1, softWrap = false)
+}
+
+/** Активная точка доступа: слева значок, справа число подключённых устройств. */
+@Composable
+private fun HotspotCompact(info: HotspotInfo, s: IslandSettings) {
+    val h = activeHeight(s)
+    CompactRow(h, compactGap(s), sideMax(s),
+        left = {
+            Icon(Icons.Rounded.WifiTethering, null, tint = Tints.Blue, modifier = Modifier.size(h * 0.52f))
+        },
+        right = {
+            FitText(info.clientsText, Tints.Blue, 13.sp, 9.sp, FontWeight.SemiBold)
+        },
+        shrink = false,
+    )
 }
 
 /** Мягко светящаяся точка — признак того, что фонарик горит. Свечение только перерисовывается. */

@@ -25,6 +25,8 @@ data class MediaInfo(
     /** «Нравится» и «Не нравится» из самого плеера (Яндекс Музыка, YouTube Music и др.), если он их даёт */
     val like: PlayerAction? = null,
     val dislike: PlayerAction? = null,
+    /** Кнопка повтора из плеера: MusicFind отдаёт её отдельной командой */
+    val repeat: PlayerAction? = null,
 ) {
     fun positionAt(now: Long): Long {
         val p = if (playing) positionMs + ((now - positionTime) * speed).toLong() else positionMs
@@ -33,7 +35,7 @@ data class MediaInfo(
 }
 
 /** Своя кнопка плеера: что отправить ему и включена ли она уже (трек уже нравится). */
-data class PlayerAction(val action: String, val on: Boolean)
+data class PlayerAction(val action: String, val on: Boolean, val one: Boolean = false)
 
 data class LyricLine(val timeMs: Long, val text: String)
 
@@ -89,6 +91,8 @@ data class ChronoInfo(
     val pause: PendingIntent? = null,
     val resume: PendingIntent? = null,
     val reset: PendingIntent? = null,
+    /** Это запись экрана или голоса, а не таймер: красная волна и кнопка «стоп» */
+    val recording: Boolean = false,
 ) {
     fun elapsed(nowWall: Long): Long = pausedMs ?: if (countDown) (base - nowWall).coerceAtLeast(0) else nowWall - base
 
@@ -106,7 +110,22 @@ data class ChronoInfo(
 
     /** Запись экрана или звука — показывается красным. */
     val isRecording: Boolean
-        get() = title.lowercase().let { t -> "record" in t || "запис" in t }
+        get() = recording || title.lowercase().let { t -> "record" in t || "запис" in t }
+}
+
+/** Активная точка доступа: сколько устройств подключено. */
+data class HotspotInfo(val clients: Int, val stop: PendingIntent? = null) {
+    val clientsText: String
+        get() {
+            if (clients <= 0) return tr("Нет устройств", "No devices")
+            val ru = when {
+                clients % 10 == 1 && clients % 100 != 11 -> "$clients устройство"
+                clients % 10 in 2..4 && clients % 100 !in 12..14 -> "$clients устройства"
+                else -> "$clients устройств"
+            }
+            val en = if (clients == 1) "1 device" else "$clients devices"
+            return tr(ru, en)
+        }
 }
 
 /** Звонок из уведомления звонилки: входящий или идущий разговор. */
@@ -289,6 +308,8 @@ object Tints {
     val Purple = Color(0xFFBF5AF2)
     val Teal = Color(0xFF64D2FF)
     val Gray = Color(0xFF8E8E93)
+    /** Автообводка на тёмном фоне — чуть темнее обычного серого. */
+    val AutoOutline = Color(0xFF747479)
     val Lavender = Color(0xFFC6C3F7)
 }
 

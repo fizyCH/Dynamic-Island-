@@ -180,13 +180,17 @@ data class IslandSettings(
     val outlineColor: Long = 0xFF3A3A40,
     val outlineWidth: Float = 1f,
     val outlineFromArt: Boolean = true,
+    /** Обводка по цвету на экране вокруг острова: тёмный фон — серая рамка, светлый — без неё */
+    val autoOutlineOnScreen: Boolean = true,
+    /** Резерв: обводка по тёмным обоям, если чтение цвета экрана выключено */
+    val autoOutlineOnDark: Boolean = false,
     val shadow: Boolean = false,
 
     // Цвет кнопок в карточке уведомления
     val accentMode: AccentMode = AccentMode.DEFAULT,
     val accentColor: Long = 0xFF0A84FF,
 
-    // Обновления из GitHub Releases
+    // Обновления с OTA-сервера MusicFind
     val autoUpdateCheck: Boolean = true,
     /** Версия, от которой отказались, — про неё больше не напоминаем */
     val skippedVersion: String = "",
@@ -339,6 +343,8 @@ object SettingsRepo {
                 )
             }
         }
+        // 1.6.5: автообводка теперь по цвету экрана; два источника одновременно не держим
+        if (current.autoOutlineOnScreen && current.autoOutlineOnDark) update { copy(autoOutlineOnDark = false) }
     }
 
     fun update(block: IslandSettings.() -> IslandSettings) {

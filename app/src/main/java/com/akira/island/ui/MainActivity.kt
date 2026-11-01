@@ -42,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +53,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -89,7 +87,6 @@ import com.akira.island.ui.screens.PermissionsScreen
 import com.akira.island.ui.screens.SizeScreen
 import com.akira.island.ui.screens.TestsScreen
 import com.akira.island.service.KeepAliveService
-import com.akira.island.update.UpdateChecker
 
 enum class Screen {
     CARDS, EVENTS, GESTURES, LYRICS, SIZE, COLORS, INSTRUCTION, ABOUT, DIAG, LOOK, ANIM, EFFECTS, BANNERS,
@@ -129,9 +126,6 @@ private fun AppRoot() {
     }
     BackHandler(enabled = stack.isNotEmpty(), onBack = back)
 
-    // Раз в 3 часа спрашиваем GitHub, не вышла ли новая версия; после обновления — «Что нового»
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { UpdateChecker.check(context.applicationContext, force = false) }
     // Сменили язык — экраны рисуются заново на нём, а открытая вкладка и экран остаются
     LangScope {
         WhatsNewDialog()

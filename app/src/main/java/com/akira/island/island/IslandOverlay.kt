@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -104,9 +105,11 @@ import com.akira.island.data.ExpandStyle
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
 import com.akira.island.data.TapAction
+import com.akira.island.data.WallpaperTone
 import com.akira.island.service.CallMonitor
 import com.akira.island.service.NavScreen
 import com.akira.island.service.PayMonitor
+import com.akira.island.service.ScreenTone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -139,6 +142,7 @@ fun IslandOverlay(
     // В энергосбережении Android с «Экономией заряда» остров обходится без живых эффектов
     val s = remember(saved, powerSave) { saved.forPowerSave(powerSave) }
     val media by IslandBus.media.collectAsState()
+    val hotspot by IslandBus.hotspot.collectAsState()
     val lyrics by IslandBus.lyrics.collectAsState()
     val progress by IslandBus.progress.collectAsState()
     val chrono by IslandBus.chrono.collectAsState()
@@ -235,6 +239,7 @@ fun IslandOverlay(
         if (s.cardLive) liveActive.maxByOrNull { it.postTime }?.let { persistent += Act.LiveA(it) }
         stopwatch?.let { persistent += Act.StopwatchA(it) }
         if (s.cardTimer) chronoActive.maxByOrNull { it.postTime }?.let { persistent += Act.ChronoA(it) }
+        hotspot?.let { persistent += Act.HotspotA(it) }
         val m = media
         if (s.cardMedia && m != null && !(s.hideWhenPlayerOpen && foreground == m.pkg)) persistent += Act.MediaA(m)
         if (s.cardProgress) progress.values.maxByOrNull { it.postTime }?.let { persistent += Act.ProgressA(it) }
@@ -284,7 +289,12 @@ fun IslandOverlay(
 
     // Раскрытая активность пропала (музыку закрыли, таймер отменили) — сворачиваемся, а не показываем часы
     val focusGone = expanded && focus != null && focus != Act.Idle.id && acts.none { it.id == focus }
-    LaunchedEffect(focusGone) { if (focusGone) Controls.collapse() }
+    LaunchedEffect(focusGone, focus) {
+        if (!focusGone) return@LaunchedEffect
+        // Плеер на миг теряет метаданные, пока готовит следующий трек, — не сворачиваем карточку сразу
+        if (focus == "media") delay(3_000)
+        Controls.collapse()
+    }
 
     // «Сворачивать раскрытый остров»: если его столько секунд не трогают, он сворачивается сам
     LaunchedEffect(showExpanded, s.autoCollapseSec) {
@@ -462,6 +472,14 @@ private fun IslandBody(
     val shape = remember(corner, s.notch) { AnimatedIslandShape(corner, s.notch) }
     val accent = (primary as? Act.MediaA)?.m?.accent
     val outlineColor = if (s.outlineFromArt && accent != null) accent else Color(s.outlineColor)
+    // Автообводка: по цвету экрана вокруг острова, а если это выключено — по тёмным обоям
+    val darkWallpaper by WallpaperTone.dark.collectAsState()
+    val darkScreen by ScreenTone.dark.collectAsState()
+    val autoOutline = !s.outline && when {
+        s.autoOutlineOnScreen -> darkScreen
+        s.autoOutlineOnDark -> darkWallpaper
+        else -> false
+    }
 
     // Свечение цвета обложки, пока играет музыка («Эффекты»): с треком цвет плавно меняется, с паузой гаснет
     val playingArt = (primary as? Act.MediaA)?.m?.takeIf { it.playing }?.accent
@@ -556,6 +574,7 @@ private fun IslandBody(
                 when {
                     calibrating -> Modifier.border(2.dp, Color.White, shape)
                     s.outline -> Modifier.border(s.outlineWidth.dp, outlineColor, shape)
+                    autoOutline -> Modifier.border(1.dp, Tints.AutoOutline, shape)
                     else -> Modifier
                 },
             )
@@ -823,6 +842,13 @@ private fun Bubble(act: Act, s: IslandSettings) {
     val haptic = rememberHaptic()
     val tilt = IslandBus.glassTilt.collectAsState()
     val now = rememberNow(500, active = act is Act.TimerA)
+    val darkWallpaper by WallpaperTone.dark.collectAsState()
+    val darkScreen by ScreenTone.dark.collectAsState()
+    val autoOutline = !s.outline && when {
+        s.autoOutlineOnScreen -> darkScreen
+        s.autoOutlineOnDark -> darkWallpaper
+        else -> false
+    }
     Box(
         Modifier
             .size(h)
@@ -832,7 +858,13 @@ private fun Bubble(act: Act, s: IslandSettings) {
                 if (s.liquidGlass) Modifier.glassSurface(CircleShape, Color(s.color), s.glassOpacity / 100f, tilt = { tilt.value })
                 else Modifier.background(Color(s.color)),
             )
-            .then(if (s.outline) Modifier.border(s.outlineWidth.dp, Color(s.outlineColor), CircleShape) else Modifier)
+            .then(
+                when {
+                    s.outline -> Modifier.border(s.outlineWidth.dp, Color(s.outlineColor), CircleShape)
+                    autoOutline -> Modifier.border(1.dp, Tints.AutoOutline, CircleShape)
+                    else -> Modifier
+                },
+            )
             .clickable {
                 haptic()
                 Controls.expand(act.id)
@@ -861,6 +893,10 @@ private fun Bubble(act: Act, s: IslandSettings) {
             is Act.CallA -> Icon(Ios.call, null, tint = Tints.Green, modifier = Modifier.size(inner * 0.7f))
             is Act.LiveA -> LiveGlyph(act.l, inner, liveTint(act.l.kind))
             is Act.ChargingA -> Icon(Ios.flash, null, tint = Tints.Green, modifier = Modifier.size(inner * 0.7f))
+            is Act.HotspotA -> Icon(
+                androidx.compose.material.icons.Icons.Rounded.WifiTethering, null,
+                tint = Tints.Blue, modifier = Modifier.size(inner * 0.7f),
+            )
             else -> Unit
         }
     }

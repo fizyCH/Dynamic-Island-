@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.ForkRight
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Navigation
@@ -34,7 +35,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,11 +65,7 @@ import com.akira.island.ui.Screen
 import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
 import com.akira.island.ui.Ui
-import com.akira.island.ui.UpdateSection
-import com.akira.island.ui.updateStatusText
 import com.akira.island.update.UpdateChecker
-import com.akira.island.update.UpdateState
-import kotlinx.coroutines.launch
 
 @Composable
 fun InstructionScreen(onBack: () -> Unit) {
@@ -169,6 +165,7 @@ private fun Step(n: Int, title: String, text: String) {
 }
 
 private val GithubPurple = Color(0xFF8250DF)
+private const val FORK_URL = "https://github.com/fizyCH/Dynamic-Island-"
 
 /** Главная страница проекта на GitHub — в браузере или приложении GitHub. */
 private fun openGithub(context: Context) {
@@ -179,38 +176,31 @@ private fun openGithub(context: Context) {
     }
 }
 
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+}
+
 /** «О приложении»: версия и обновления, помощь и ссылки — отдельно от настроек. */
 @Composable
 fun AppInfoScreen(open: (Screen) -> Unit) {
     val context = LocalContext.current
     val s by SettingsRepo.state.collectAsState()
-    val update by UpdateChecker.state.collectAsState()
-    val scope = rememberCoroutineScope()
     val version = remember { UpdateChecker.currentVersion(context) }
     var notes by remember { mutableStateOf(false) }
 
     Page(tr("О приложении", "About")) {
-        AppHeader(version, update)
-        UpdateSection()
-
-        SectionHeader(tr("Обновления", "Updates"))
-        Group {
-            GroupToggle(Pos.First, Icons.Rounded.SystemUpdate, tr("Искать обновления", "Check for updates"),
-                tr("Раз в 3 часа смотреть на GitHub, не вышла ли новая версия", "Look on GitHub every 3 hours for a new version"),
-                s.autoUpdateCheck, color = Tile.Green) { v ->
-                SettingsRepo.update { copy(autoUpdateCheck = v) }
-            }
-            GroupItem(Pos.Middle, Icons.Rounded.Refresh, tr("Проверить сейчас", "Check now"), updateStatusText(update, version),
-                onClick = { scope.launch { UpdateChecker.check(context.applicationContext, force = true) } }, color = Tile.Blue)
-            GroupItem(Pos.Last, Icons.Rounded.NewReleases, tr("Что нового", "What's new"), tr("Изменения в версии $version", "Changes in version $version"),
-                onClick = { notes = true }, color = Tile.Purple) { Arrow() }
-        }
+        AppHeader(version)
 
         SectionHeader(tr("Помощь", "Help"))
         Group {
             GroupItem(Pos.First, Icons.Rounded.Lightbulb, tr("Инструкция", "Instructions"),
                 tr("Как включить остров на Android 13+", "How to turn the island on with Android 13+"),
                 onClick = { open(Screen.INSTRUCTION) }, color = Tile.Yellow) { Arrow() }
+            GroupItem(Pos.Middle, Icons.Rounded.NewReleases, tr("Что нового", "What's new"),
+                tr("Изменения в версии $version", "Changes in version $version"),
+                onClick = { notes = true }, color = Tile.Purple) { Arrow() }
             KeepAliveItem(Pos.Middle, open)
             GroupItem(Pos.Middle, Icons.Rounded.Navigation, tr("Диагностика навигации", "Navigation diagnostics"),
                 tr("Что присылает навигатор, такси или доставка — если не видно расстояния",
@@ -225,8 +215,11 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
         SectionHeader(tr("Проект", "Project"))
         Group {
             GroupItem(Pos.First, ImageVector.vectorResource(R.drawable.ic_github), tr("Страница GitHub", "GitHub page"),
-                tr("Описание, новые версии и исходный код", "Description, new versions and source code"),
+                tr("Описание и исходный код", "Description and source code"),
                 onClick = { openGithub(context) }, color = GithubPurple) { Arrow() }
+            GroupItem(Pos.Middle, Icons.Rounded.ForkRight, tr("Форк проекта", "Project fork"),
+                tr("Версия с добавленными функциями островка", "Version with the added island features"),
+                onClick = { openUrl(context, FORK_URL) }, color = Tile.Purple) { Arrow() }
             GroupItem(Pos.Last, Icons.Rounded.Info, tr("Об острове", "About the island"),
                 tr("Что умеет и откуда идея", "What it does and where the idea comes from"),
                 onClick = { open(Screen.ABOUT) }, color = Tile.Indigo) { Arrow() }
@@ -238,7 +231,7 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
 
 /** Шапка «О приложении»: значок, название, версия и есть ли обновление. */
 @Composable
-private fun AppHeader(version: String, update: UpdateState) {
+private fun AppHeader(version: String) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Ui.Card).padding(vertical = 26.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -250,20 +243,6 @@ private fun AppHeader(version: String, update: UpdateState) {
         Spacer(Modifier.height(14.dp))
         Text(tr("Динамический остров", "Dynamic Island"), color = Ui.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(tr("Версия $version", "Version $version"), color = Ui.Sub, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
-        val (label, color) = when (update) {
-            UpdateState.UpToDate -> tr("Последняя версия", "Up to date") to Tints.Green
-            is UpdateState.Available -> tr("Доступна версия ${update.release.version}", "Version ${update.release.version} is available") to Ui.Primary
-            UpdateState.Checking -> tr("Проверяю обновления…", "Checking for updates…") to Ui.Sub
-            is UpdateState.Error -> tr("Не удалось проверить обновления", "Couldn't check for updates") to Tints.Orange
-            UpdateState.Idle -> null to Ui.Sub
-        }
-        if (label != null) {
-            Text(
-                label, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 12.dp).clip(CircleShape).background(color.copy(alpha = 0.14f))
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
-            )
-        }
     }
 }
 

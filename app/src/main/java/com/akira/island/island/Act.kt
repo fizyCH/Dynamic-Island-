@@ -4,6 +4,7 @@ import com.akira.island.core.AlarmInfo
 import com.akira.island.core.BatteryInfo
 import com.akira.island.core.CallInfo
 import com.akira.island.core.ChronoInfo
+import com.akira.island.core.HotspotInfo
 import com.akira.island.core.LiveInfo
 import com.akira.island.core.MediaInfo
 import com.akira.island.core.Notice
@@ -38,6 +39,7 @@ sealed class Act(val id: String, val transient: Boolean = false) {
         override val pkg: String get() = l.pkg
     }
     data class ChargingA(val b: BatteryInfo) : Act("charging")
+    data class HotspotA(val h: HotspotInfo) : Act("hotspot")
     /** Оплата телефоном: ждём терминал. Не раскрывается и не уходит в пузырь */
     data class PayA(val p: PayReady) : Act("pay", transient = true) {
         override val pkg: String get() = p.pkg

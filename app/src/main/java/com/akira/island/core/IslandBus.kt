@@ -68,6 +68,11 @@ object IslandBus {
     val locked = MutableStateFlow(false)
     /** На экране — экран блокировки (с PIN-кодом или без): в капсуле замок, если он включён в «Событиях» */
     val keyguard = MutableStateFlow(false)
+    /** MusicFind присылает сюда лайк и режим повтора, чтобы остров не зависел от media-сессии. */
+    val musicFindFavorite = MutableStateFlow<Boolean?>(null)
+    val musicFindRepeat = MutableStateFlow<Int?>(null)
+    /** Активная точка доступа: постоянная карточка со счётчиком устройств. */
+    val hotspot = MutableStateFlow<com.akira.island.core.HotspotInfo?>(null)
     /** Открыт экран «Размер и положение»: остров красный, чтобы подогнать его под камеру */
     val calibrating = MutableStateFlow(false)
     /** Играет та самая песня — остров празднует (пасхалка, Egg.kt) */

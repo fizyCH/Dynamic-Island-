@@ -21,9 +21,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -31,13 +31,14 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Новая версия на GitHub: номер, что изменилось и откуда скачать APK. */
+/** Новая версия с сервера обновлений: номер, что изменилось и откуда скачать APK. */
 data class Release(
     val version: String,
     val notes: String,
     val apkUrl: String?,
     val pageUrl: String,
     val sizeBytes: Long,
+    val versionCode: Int = 0,
 )
 
 sealed interface UpdateState {
@@ -56,12 +57,15 @@ sealed interface DownloadState {
 }
 
 /**
- * Обновление из приложения: смотрит последний релиз на GitHub, при новой версии показывает кнопку
+ * Обновление из приложения: смотрит версию на своём сервере, при новой версии показывает кнопку
  * «Обновить», скачивает APK и открывает системную установку. Подпись у всех сборок одна,
  * поэтому APK ставится поверх.
  */
 object UpdateChecker {
     const val REPO = "Akira9021/Dynamic-Island-"
+    /** Домен MusicFind, который раздаёт OTA для обеих Android-сборок. */
+    const val OTA_BASE = "https://app.musicfind.sandro84.crazedns.ru"
+    private const val OTA_VERSION_URL = "$OTA_BASE/api/island/version"
     private const val CHECK_EVERY_MS = 3 * 60 * 60 * 1000L
 
     val state = MutableStateFlow<UpdateState>(UpdateState.Idle)
@@ -73,6 +77,11 @@ object UpdateChecker {
     fun currentVersion(context: Context): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull() ?: "0"
+
+    fun currentVersionCode(context: Context): Int = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionCode
+    }.getOrDefault(0)
 
     /**
      * [force] — проверка по кнопке: показывает «последняя версия» и ошибки связи.
@@ -92,10 +101,11 @@ object UpdateChecker {
         val release = result.getOrNull()
         state.value = when {
             result.isFailure -> if (force) UpdateState.Error(
-                tr("Нет связи с GitHub. Проверьте интернет и попробуйте ещё раз.", "Can't reach GitHub. Check your internet connection and try again."),
+                tr("Нет связи с сервером обновлений. Проверьте интернет и попробуйте ещё раз.",
+                    "Can't reach the update server. Check your internet connection and try again."),
             ) else UpdateState.Idle
             release == null -> if (force) UpdateState.UpToDate else UpdateState.Idle
-            !isNewer(release.version, currentVersion(context)) -> if (force) UpdateState.UpToDate else UpdateState.Idle
+            !isNewerRelease(release, context) -> if (force) UpdateState.UpToDate else UpdateState.Idle
             !force && release.version == s.skippedVersion -> UpdateState.Idle
             else -> UpdateState.Available(release)
         }
@@ -271,14 +281,14 @@ object UpdateChecker {
     }
 
     private fun fetchLatest(): Release? {
-        val conn = (URL("https://api.github.com/repos/$REPO/releases/latest").openConnection() as HttpURLConnection).apply {
+        val conn = (URL(OTA_VERSION_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 15_000
-            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "DynamicIsland-Android")
         }
         try {
-            // Релизов ещё нет
+            // Версия ещё не опубликована
             if (conn.responseCode == 404) return null
             if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
             return parseRelease(conn.inputStream.bufferedReader().use { it.readText() })
@@ -287,22 +297,31 @@ object UpdateChecker {
         }
     }
 
-    /** Разбор ответа GitHub API `releases/latest`. */
+    /** Разбор ответа сервера обновлений MusicFind (`/api/island/version`). */
     internal fun parseRelease(json: String): Release? {
         val o = Json.parseToJsonElement(json).jsonObject
-        val tag = o["tag_name"]?.jsonPrimitive?.contentOrNull ?: return null
-        val apk: JsonObject? = o["assets"]?.jsonArray?.map { it.jsonObject }?.firstOrNull { a ->
-            val name = a["name"]?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
-            name.endsWith(".apk") && "debug" !in name
-        }
+        if (o["ok"]?.jsonPrimitive?.booleanOrNull == false) return null
+        val code = o["version_code"]?.jsonPrimitive?.intOrNull ?: 0
+        val name = o["version_name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        if (code <= 0 && name.isBlank()) return null
+        val download = o["download_url"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
         return Release(
-            version = tag.removePrefix("v").removePrefix("V"),
-            notes = o["body"]?.jsonPrimitive?.contentOrNull.orEmpty().trim(),
-            apkUrl = apk?.get("browser_download_url")?.jsonPrimitive?.contentOrNull,
-            pageUrl = o["html_url"]?.jsonPrimitive?.contentOrNull ?: "https://github.com/$REPO/releases",
-            sizeBytes = apk?.get("size")?.jsonPrimitive?.longOrNull ?: 0L,
+            version = name.ifBlank { code.toString() },
+            notes = o["notes"]?.jsonPrimitive?.contentOrNull.orEmpty().trim(),
+            apkUrl = download.takeIf { it.isNotEmpty() }?.let(::absoluteUrl),
+            pageUrl = OTA_BASE,
+            sizeBytes = o["size"]?.jsonPrimitive?.longOrNull ?: 0L,
+            versionCode = code,
         )
     }
+
+    private fun absoluteUrl(url: String): String =
+        if (url.startsWith("http://") || url.startsWith("https://")) url
+        else OTA_BASE + (if (url.startsWith("/")) url else "/$url")
+
+    private fun isNewerRelease(release: Release, context: Context): Boolean =
+        if (release.versionCode > 0) release.versionCode > currentVersionCode(context)
+        else isNewer(release.version, currentVersion(context))
 
     /** 1.10.0 новее 1.9.2: сравниваем по числам, а не по строкам. */
     internal fun isNewer(remote: String, local: String): Boolean {

@@ -207,6 +207,21 @@ object Controls {
         }
     }
 
+    /** Если у уведомления точки доступа нет действия «Отключить» — открываем её настройки. */
+    fun openHotspotSettings(context: Context) {
+        val intents = listOf(
+            Intent("android.settings.TETHER_SETTINGS"),
+            Intent(Settings.ACTION_WIRELESS_SETTINGS),
+        )
+        for (intent in intents) {
+            val ok = runCatching {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                true
+            }.getOrDefault(false)
+            if (ok) return
+        }
+    }
+
     @Suppress("MissingPermission")
     fun openCall(context: Context, call: CallInfo) {
         if (call.key == TEST_CALL) return

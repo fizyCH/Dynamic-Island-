@@ -1,7 +1,10 @@
 package com.akira.island.service
 
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -12,6 +15,7 @@ import android.os.Looper
 import android.os.SystemClock
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import androidx.palette.graphics.Palette
 import com.akira.island.core.Controls
@@ -29,6 +33,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
@@ -52,12 +57,36 @@ class MediaMonitor(private val context: Context) {
     private var hiddenKey: String? = null
     private var lyricsKey: String? = null
     private var pendingHideKey: String? = null
+    /** Плеер на миг убирает метаданные при переключении трека — не прячем карточку сразу. */
+    private var blankSince = 0L
+    private var blankJob: Job? = null
+    private val musicFindReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != MUSICFIND_STATE_ACTION) return
+            IslandBus.musicFindFavorite.value = intent.getBooleanExtra(MUSICFIND_EXTRA_FAVORITE, false)
+            IslandBus.musicFindRepeat.value = intent.getIntExtra(MUSICFIND_EXTRA_REPEAT, 0)
+        }
+    }
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list ->
         bind(list.orEmpty())
     }
 
     fun start() {
+        // MusicFind additionally sends its favorite/repeat state explicitly: some controllers
+        // don't expose custom media actions, and the island must still show the right star/loop.
+        runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                musicFindReceiver,
+                IntentFilter(MUSICFIND_STATE_ACTION),
+                ContextCompat.RECEIVER_EXPORTED,
+            )
+        }
+        scope.launch {
+            combine(IslandBus.musicFindFavorite, IslandBus.musicFindRepeat) { _, _ -> Unit }
+                .collect { refresh() }
+        }
         try {
             manager?.addOnActiveSessionsChangedListener(sessionsListener, component, handler)
             bind(manager?.getActiveSessions(component).orEmpty())
@@ -75,6 +104,7 @@ class MediaMonitor(private val context: Context) {
 
     fun stop() {
         runCatching { manager?.removeOnActiveSessionsChangedListener(sessionsListener) }
+        runCatching { context.unregisterReceiver(musicFindReceiver) }
         unbindAll()
         scope.cancel()
         Controls.mediaController = null
@@ -118,9 +148,13 @@ class MediaMonitor(private val context: Context) {
         val title = meta?.getString(MediaMetadata.METADATA_KEY_TITLE)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         if (chosen == null || meta == null || title.isNullOrBlank()) {
+            if (keepThroughBlank()) return
             publish(null)
             return
         }
+        blankSince = 0L
+        blankJob?.cancel()
+        blankJob = null
 
         val artist = meta.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: meta.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
@@ -132,7 +166,37 @@ class MediaMonitor(private val context: Context) {
         val prev = IslandBus.media.value
         val sameTrack = prev?.key == key
 
-        val (like, dislike) = rates(state)
+        val (parsedLike, dislike) = rates(state)
+        val parsedRepeat = repeat(state)
+        // MusicFind умеет лайк и повтор, но старые прошивки/контроллеры иногда не показывают
+        // кастомные команды в PlaybackState. Для него кнопки показываем всегда — команды известны.
+        val musicFind = chosen.packageName == MUSICFIND_PACKAGE
+        val extras = state?.extras
+        val favoriteExtra = IslandBus.musicFindFavorite.value
+            ?: if (musicFind && extras?.containsKey(MUSICFIND_EXTRA_FAVORITE) == true) {
+                extras.getBoolean(MUSICFIND_EXTRA_FAVORITE)
+            } else {
+                null
+            }
+        val repeatExtra = IslandBus.musicFindRepeat.value
+            ?: if (musicFind && extras?.containsKey(MUSICFIND_EXTRA_REPEAT) == true) {
+                extras.getInt(MUSICFIND_EXTRA_REPEAT, -1)
+            } else {
+                null
+            }
+        val like = when {
+            favoriteExtra != null -> PlayerAction(MUSICFIND_FAVORITE, favoriteExtra)
+            parsedLike != null -> parsedLike
+            musicFind -> PlayerAction(MUSICFIND_FAVORITE, false)
+            else -> null
+        }
+        val repeat = when {
+            repeatExtra != null && repeatExtra >= 0 ->
+                PlayerAction(MUSICFIND_REPEAT, repeatExtra != 0, repeatExtra == 2)
+            parsedRepeat != null -> parsedRepeat
+            musicFind -> PlayerAction(MUSICFIND_REPEAT, false)
+            else -> null
+        }
         val info = MediaInfo(
             key = key,
             pkg = chosen.packageName,
@@ -149,6 +213,7 @@ class MediaMonitor(private val context: Context) {
             canSeek = (state?.actions ?: 0L) and PlaybackState.ACTION_SEEK_TO != 0L,
             like = like,
             dislike = dislike,
+            repeat = repeat,
         )
 
         // На паузе карточка держится ещё немного и уходит, как на iPhone
@@ -196,12 +261,57 @@ class MediaMonitor(private val context: Context) {
         var dislike: PlayerAction? = null
         for (a in state?.customActions.orEmpty()) {
             val t = "${a.action} ${a.name}".lowercase()
+            val favoriteExtra = a.extras?.takeIf { it.containsKey(MUSICFIND_EXTRA_FAVORITE) }
+                ?.getBoolean(MUSICFIND_EXTRA_FAVORITE)
             when {
                 DislikeWords.containsMatchIn(t) -> if (dislike == null) dislike = PlayerAction(a.action, UndoWords.containsMatchIn(t))
-                LikeWords.containsMatchIn(t) -> if (like == null) like = PlayerAction(a.action, UndoWords.containsMatchIn(t))
+                LikeWords.containsMatchIn(t) -> if (like == null) {
+                    like = PlayerAction(a.action, favoriteExtra ?: UndoWords.containsMatchIn(t))
+                }
             }
         }
         return like to dislike
+    }
+
+    /**
+     * Повтор из медиасессии. MusicFind отдаёт команду «Повтор», «Повтор всех» или «Повтор одного»;
+     * по подписи понимаем, включён ли повтор и какой именно.
+     */
+    private fun repeat(state: PlaybackState?): PlayerAction? {
+        for (a in state?.customActions.orEmpty()) {
+            val all = "${a.action} ${a.name}".lowercase()
+            if (!RepeatWords.containsMatchIn(all)) continue
+            val mode = a.extras?.takeIf { it.containsKey(MUSICFIND_EXTRA_REPEAT) }
+                ?.getInt(MUSICFIND_EXTRA_REPEAT, -1) ?: -1
+            if (mode >= 0) return PlayerAction(a.action, mode != 0, mode == 2)
+            val name = a.name?.toString().orEmpty().lowercase()
+            val one = OneWords.containsMatchIn(name)
+            val on = one || AllWords.containsMatchIn(name)
+            return PlayerAction(a.action, on, one)
+        }
+        return null
+    }
+
+    /**
+     * MusicFind на секунду останавливает старый трек и готовит новый; метаданных в этот момент нет.
+     * Держим прежнюю карточку ещё немного, чтобы остров не мигал и не сворачивался при переключении.
+     */
+    private fun keepThroughBlank(): Boolean {
+        if (IslandBus.media.value == null) return false
+        val now = SystemClock.elapsedRealtime()
+        if (blankSince == 0L) {
+            blankSince = now
+            blankJob?.cancel()
+            blankJob = scope.launch {
+                delay(TRACK_SWITCH_GRACE_MS)
+                if (blankSince != 0L) {
+                    blankSince = 0L
+                    publish(null)
+                }
+            }
+            return true
+        }
+        return now - blankSince < TRACK_SWITCH_GRACE_MS
     }
 
     private fun publish(info: MediaInfo?) {
@@ -251,9 +361,19 @@ class MediaMonitor(private val context: Context) {
 
     private companion object {
         const val PAUSE_KEEP_MS = 45_000L
+        const val TRACK_SWITCH_GRACE_MS = 3_000L
+        const val MUSICFIND_PACKAGE = "com.musicfind.app"
+        const val MUSICFIND_STATE_ACTION = "com.musicfind.app.STATE"
+        const val MUSICFIND_EXTRA_FAVORITE = "com.musicfind.app.extra.FAVORITE"
+        const val MUSICFIND_EXTRA_REPEAT = "com.musicfind.app.extra.REPEAT"
+        const val MUSICFIND_FAVORITE = "com.musicfind.app.action.TOGGLE_FAVORITE"
+        const val MUSICFIND_REPEAT = "com.musicfind.app.action.CYCLE_REPEAT"
         val DislikeWords = Regex("dislike|не нрав|thumbs?.?down|ban|block")
         val LikeWords = Regex("like|нрав|favou?rite|heart|thumbs?.?up|любим|избран")
         val UndoWords = Regex("unlike|un_like|undo|remove|убрать|удалить|отмен")
+        val RepeatWords = Regex("repeat|повтор|зацикл|loop")
+        val AllWords = Regex("all|всех|весь|playlist|список")
+        val OneWords = Regex("one|одного|один|трек|track")
     }
 }
 

@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Person
 import android.os.Build
+import android.os.SystemClock
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import com.akira.island.core.CallInfo
 import com.akira.island.core.ChronoInfo
+import com.akira.island.core.HotspotInfo
 import com.akira.island.core.IslandBus
 import com.akira.island.core.LiveKind
 import com.akira.island.core.ProgressInfo
@@ -39,6 +41,7 @@ class NotifListener : NotificationListenerService() {
         IslandBus.calls.value = emptyMap()
         IslandBus.live.value = emptyMap()
         IslandBus.ringingAlarms.value = emptySet()
+        NotificationParser.clearRecordings()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -52,6 +55,13 @@ class NotifListener : NotificationListenerService() {
 
 object NotificationParser {
     private val icons = HashMap<String, ImageBitmap?>()
+    private val RecordingWords = Regex("record|recording|dictaphone|screen.?record|voice.?record|запис|диктофон")
+    private val HotspotWords = Regex("hotspot|tether|access point|portable hotspot|точка доступа|раздач|модем")
+    /** Уже опознанные записи: обновление уведомления не должно гасить статус. */
+    private val recordingKeys = HashSet<String>()
+    /** Ключ «пакет|канал» → до какого момента этот канал считается записью. */
+    private val recordingChannels = HashMap<String, Long>()
+    private val hotspotEntries = HashMap<String, HotspotInfo>()
 
     fun onPosted(context: Context, sbn: StatusBarNotification, initial: Boolean = false) {
         if (sbn.packageName == context.packageName) return
@@ -87,31 +97,84 @@ object NotificationParser {
             if (call != null) put(sbn.key, call) else remove(sbn.key)
         }
 
+        // Точка доступа: постоянное уведомление с числом подключённых устройств
+        val hotspot = hotspotInfo(sbn, n, ex, title, ongoing)
+        if (hotspot != null) {
+            hotspotEntries[sbn.key] = hotspot
+            IslandBus.hotspot.value = hotspotEntries.values.maxByOrNull { it.clients }
+        } else if (hotspotEntries.remove(sbn.key) != null) {
+            IslandBus.hotspot.value = hotspotEntries.values.maxByOrNull { it.clients }
+        }
+
         val ticking = ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false) && n.`when` > 0
         // Кнопки «Часов» (пауза, продолжить, сброс) — их нажимают кнопки острова
         val clock = ClockApps.isClock(context, sbn.packageName)
         val buttons = if (clock) ClockWords.buttons(n.actions) else emptyMap()
-        // Таймер или секундомер «Часов» на паузе: счёт стоит, время только в тексте, а в кнопках — «Продолжить»
-        val pausedMs = if (clock && !ticking && call == null && !isMedia && ClockAction.START in buttons) {
+        // Запись экрана или голоса без chronometer-extra: считаем время от начала уведомления.
+        // Статус «липкий»: если запись уже опознали, её обновления не должны её выключать.
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val channelKey = "${sbn.packageName}|${n.channelId.orEmpty()}"
+        val knownRecording = sbn.key in recordingKeys
+        val recentChannel = (recordingChannels[channelKey] ?: 0L) > nowElapsed
+        val recording = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
+            (recentChannel && ongoing)
+        if (recording) {
+            recordingKeys += sbn.key
+            recordingChannels[channelKey] = nowElapsed + 15_000L
+        } else {
+            recordingKeys -= sbn.key
+        }
+        val recordingBase = n.`when`.takeIf { it in 1..System.currentTimeMillis() } ?: sbn.postTime
+        // Google Часы и AOSP кладут время таймера в свой RemoteViews, а не в стандартный chronometer-extra.
+        // У звонящего будильника/таймера время уже не считается — его не трогаем.
+        val remote = if (clock && !ringing) ClockRemote.parse(n) else null
+        val remotePausedMs = remote?.pausedMs(System.currentTimeMillis())
+        // Если время есть только текстом (некоторые часы так делают), берём его при явных кнопках таймера
+        val textTime = if (clock && remote == null && !ticking && call == null && !isMedia && !ringing &&
+            ClockAction.PAUSE in buttons && ClockAction.START !in buttons
+        ) {
             listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
-                .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
+                .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }?.takeIf { it > 0 }
         } else {
             null
         }
+        val textBase = textTime?.let { time ->
+            val now = System.currentTimeMillis()
+            if (looksLikeTimer(n, title)) now + time else now - time
+        }
+        // Таймер или секундомер «Часов» на паузе: счёт стоит, время только в тексте, а в кнопках — «Продолжить»
+        val pausedMs = when {
+            remote != null -> remotePausedMs
+            clock && !ticking && call == null && !isMedia && ClockAction.START in buttons ->
+                listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
+                    .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
+            else -> null
+        }
         // Неактивный (на паузе) таймер, который остров уже убрал, снова не показываем
-        val chrono = call == null && !isMedia && (ticking || pausedMs != null) && !ClockControl.wasDismissed(sbn.key, pausedMs)
+        val chrono = call == null && !isMedia &&
+            (ticking || remote != null || textTime != null || pausedMs != null || recording) &&
+            !ClockControl.wasDismissed(sbn.key, pausedMs)
         if (clock && chrono) ClockControl.reader?.onNotificationChrono(sbn.packageName)
         if (pausedMs != null && chrono) ClockControl.dropPausedLater(sbn.key)
         IslandBus.chrono.value = IslandBus.chrono.value.toMutableMap().apply {
             if (chrono) {
-                val down = if (pausedMs != null) looksLikeTimer(n, title) else ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN, false)
-                val stop = n.actions?.firstOrNull { a ->
-                    val t = a.title?.toString()?.lowercase().orEmpty()
-                    listOf("стоп", "останов", "заверш", "stop", "finish").any { it in t }
-                }?.actionIntent
-                put(sbn.key, ChronoInfo(sbn.key, sbn.packageName, title, icon(context, sbn.packageName), n.`when`, down, sbn.postTime, stop,
+                val base = when {
+                    recording -> recordingBase
+                    remote != null -> remote.base
+                    textTime != null -> textBase ?: n.`when`
+                    else -> n.`when`
+                }
+                val down = when {
+                    recording -> false
+                    remote != null -> remote.countDown
+                    textTime != null -> looksLikeTimer(n, title)
+                    pausedMs != null -> looksLikeTimer(n, title)
+                    else -> ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN, false)
+                }
+                val stop = stopAction(n, fallbackLast = recording)
+                put(sbn.key, ChronoInfo(sbn.key, sbn.packageName, title, icon(context, sbn.packageName), base, down, sbn.postTime, stop,
                     pausedMs = pausedMs, pause = buttons[ClockAction.PAUSE], resume = buttons[ClockAction.START],
-                    reset = buttons[ClockAction.RESET]))
+                    reset = buttons[ClockAction.RESET], recording = recording))
             } else {
                 remove(sbn.key)
             }
@@ -138,6 +201,18 @@ object NotificationParser {
             if (PayMonitor.onNotification(context, sbn)) return
             Messages.maybeShow(service, sbn, appLabel(context, sbn.packageName))
         }
+    }
+
+    /** Кнопка «Стоп» в записи/таймере: по подписи, а для записи — крайняя кнопка, если подписи нет. */
+    private fun stopAction(n: Notification, fallbackLast: Boolean): PendingIntent? {
+        val actions = n.actions.orEmpty().filter { it.actionIntent != null }
+        val words = listOf("стоп", "останов", "заверш", "готов", "stop", "finish", "end", "done", "отмен", "cancel", "удал", "delete")
+        val found = actions.firstOrNull { a ->
+            val t = a.title?.toString()?.lowercase().orEmpty()
+            words.any { it in t }
+        }?.actionIntent
+        if (found != null) return found
+        return if (fallbackLast) actions.lastOrNull()?.actionIntent else null
     }
 
     private fun parseCall(context: Context, sbn: StatusBarNotification, title: String): CallInfo? {
@@ -185,6 +260,63 @@ object NotificationParser {
         )
     }
 
+    /** Запись экрана или голоса: постоянное уведомление с «record/запись/диктофон» в пакете, канале или тексте. */
+    private fun isRecordingNotification(sbn: StatusBarNotification, n: Notification, ex: android.os.Bundle, title: String): Boolean {
+        if (n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_TRANSPORT) return false
+        if (ex.containsKey(Notification.EXTRA_MEDIA_SESSION)) return false
+        if (n.flags and Notification.FLAG_ONGOING_EVENT == 0) return false
+        val pkg = sbn.packageName.lowercase()
+        val channel = n.channelId.orEmpty().lowercase()
+        val bits = listOfNotNull(
+            title,
+            n.tickerText?.toString(),
+            ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+        ).joinToString(" ").lowercase()
+        val pkgHint = pkg.contains("record") || pkg.contains("dictaphone") ||
+            pkg.contains("voicenote") || (pkg.contains("voice") && (pkg.contains("rec") || pkg.contains("memo")))
+        val channelHint = channel.contains("record") || channel.contains("запис") ||
+            channel.contains("dictaphone") || channel.contains("voicerec")
+        val screenWords = (bits.contains("screen") || bits.contains("экран")) &&
+            (bits.contains("record") || bits.contains("запис"))
+        val systemScreen = pkg == "com.android.systemui" && (channelHint || screenWords)
+        val words = "$title $channel $bits"
+        val known = pkgHint || channelHint || systemScreen || screenWords ||
+            (RecordingWords.containsMatchIn(words) && (pkg.contains("screen") || pkg.contains("voice")))
+        return known
+    }
+
+    /** Точка доступа: постоянное уведомление с «hotspot/точка доступа» и счётчиком устройств. */
+    private fun hotspotInfo(sbn: StatusBarNotification, n: Notification, ex: android.os.Bundle, title: String, ongoing: Boolean): HotspotInfo? {
+        if (!ongoing) return null
+        if (n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_TRANSPORT) return null
+        if (ex.containsKey(Notification.EXTRA_MEDIA_SESSION)) return null
+        val pkg = sbn.packageName.lowercase()
+        val channel = n.channelId.orEmpty().lowercase()
+        val bits = listOfNotNull(
+            title,
+            n.tickerText?.toString(),
+            ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+        ).joinToString(" ").lowercase()
+        if (!HotspotWords.containsMatchIn("$pkg $channel $bits")) return null
+        val stop = n.actions?.firstOrNull { a ->
+            val t = a.title?.toString()?.lowercase().orEmpty()
+            listOf("отключ", "выключ", "останов", "заверш", "stop", "turn off", "disable", "end").any { it in t }
+        }?.actionIntent
+        return HotspotInfo(hotspotCount("$title $bits"), stop)
+    }
+
+    private fun hotspotCount(text: String): Int {
+        val t = text.lowercase()
+        if ("нет устройств" in t || "no device" in t) return 0
+        val after = Regex("""(\d+)\s*(?:устройств|device|client|подключ|connected)""").find(t)
+        val before = Regex("""(?:подключ|connected|clients?)[^\d]{0,12}(\d+)""").find(t)
+        return (after ?: before)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    }
+
     /** Таймер на паузе или секундомер — по заголовку и каналу; по умолчанию таймер. */
     private fun looksLikeTimer(n: Notification, title: String): Boolean {
         val t = (title + " " + n.channelId.orEmpty()).lowercase()
@@ -198,11 +330,22 @@ object NotificationParser {
     private fun pending(ex: android.os.Bundle, key: String): PendingIntent? =
         runCatching { ex.getParcelable<PendingIntent>(key) }.getOrNull()
 
+    fun clearRecordings() {
+        recordingKeys.clear()
+        recordingChannels.clear()
+        hotspotEntries.clear()
+        IslandBus.hotspot.value = null
+    }
+
     fun onRemoved(key: String) {
         Messages.forget(key)
         LiveParser.forget(key)
         ClockControl.forget(key)
         LiveDebug.forget(key)
+        recordingKeys.remove(key)
+        if (hotspotEntries.remove(key) != null) {
+            IslandBus.hotspot.value = hotspotEntries.values.maxByOrNull { it.clients }
+        }
         if (key in IslandBus.calls.value) IslandBus.calls.value = IslandBus.calls.value - key
         if (key in IslandBus.progress.value) IslandBus.progress.value = IslandBus.progress.value - key
         if (key in IslandBus.chrono.value) IslandBus.chrono.value = IslandBus.chrono.value - key
