@@ -212,7 +212,13 @@ object NotificationParser {
             words.any { it in t }
         }?.actionIntent
         if (found != null) return found
-        return if (fallbackLast) actions.lastOrNull()?.actionIntent else null
+        // Без подписи «Стоп» не жмём последнюю кнопку наугад: у записи это может быть «Поделиться»
+        // или «Открыть приложение». Пусть служба попробует найти кнопку в шторке.
+        return if (fallbackLast && actions.size == 1 && actions.first().title.isNullOrBlank()) {
+            actions.first().actionIntent
+        } else {
+            null
+        }
     }
 
     private fun parseCall(context: Context, sbn: StatusBarNotification, title: String): CallInfo? {

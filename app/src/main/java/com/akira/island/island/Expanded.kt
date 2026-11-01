@@ -517,7 +517,7 @@ private fun ChronoExpanded(c: ChronoInfo) {
                     .size(44.dp)
                     .clip(CircleShape)
                     .border(3.dp, Color.White, CircleShape)
-                    .clickable { if (!Controls.send(context, c.stop)) Controls.openApp(context, c.pkg) },
+                    .clickable { Controls.stopRecording(context, c) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(Tints.Red))
@@ -531,7 +531,7 @@ private fun ChronoExpanded(c: ChronoInfo) {
         return
     }
     Row(Modifier.clickable { Controls.openApp(context, c.pkg) }, verticalAlignment = Alignment.CenterVertically) {
-        AppIcon(c.icon, 46.dp, Ios.timer, Tints.Orange)
+        Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(46.dp))
         Spacer(Modifier.width(14.dp))
         Text(c.title, color = Tints.Orange, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(top = 12.dp))
@@ -564,7 +564,7 @@ private fun ClockChrono(c: ChronoInfo) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).clickable { Controls.openApp(context, c.pkg) }, horizontalAlignment = Alignment.End) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AppIcon(c.icon, 16.dp, Ios.timer, color)
+                Icon(Ios.timer, null, tint = color, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(if (paused) tr("Пауза", "Paused") else if (c.countDown) tr("Таймер", "Timer") else tr("Секундомер", "Stopwatch"),
                     color = color, fontSize = 14.sp, maxLines = 1)
@@ -692,7 +692,7 @@ private fun HotspotExpanded(info: HotspotInfo) {
             iconScale = 0.55f,
         ) {
             haptic()
-            if (!Controls.send(context, info.stop)) Controls.openHotspotSettings(context)
+            Controls.stopHotspot(context, info)
         }
     }
 }
@@ -802,7 +802,7 @@ private fun IdleExpanded(s: IslandSettings, battery: BatteryInfo) {
 @Composable
 private fun QuickButton(a: QuickAction, context: Context, modifier: Modifier) {
     val icon = when (a) {
-        QuickAction.STOPWATCH -> Ios.stopwatch
+        QuickAction.STOPWATCH -> Ios.timer
         QuickAction.FLASHLIGHT -> Ios.flashlight
         QuickAction.SCREENSHOT -> Icons.Rounded.Screenshot
         QuickAction.CAMERA -> Icons.Rounded.PhotoCamera

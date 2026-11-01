@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.18] — 2026-11-01
+
+- 🛜 **Hotspot turns off from the island** — with the notification action when available; otherwise the service taps the Hotspot tile in Quick Settings. No settings page opens.
+- ⏹️ **Screen recording and voice recorder stop from the island** — with the notification Stop action or automatically through the notification shade. The recording app no longer opens.
+- ⏳ **Timer and stopwatch now use the hourglass icon** instead of the source app's logo — in the capsule, expanded island, bubble and quick actions.
+- ℹ️ The automation needs the accessibility service. If there is no Hotspot tile in Quick Settings, the island shows a short message instead of opening settings.
+
 ## [1.6.17] — 2026-11-01
 
 - 💧 **Liquid Glass is now on the buttons only** — like iOS 26: glass player, timer, stopwatch and quick-action buttons, while the capsule, bubble and background stay solid.

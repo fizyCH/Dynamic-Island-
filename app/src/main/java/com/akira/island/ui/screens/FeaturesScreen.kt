@@ -76,7 +76,6 @@ import com.akira.island.ui.Tile
 import com.akira.island.ui.Ui
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material.icons.rounded.HourglassBottom
-import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.FlashlightOn
 import androidx.compose.material.icons.rounded.Screenshot
 import androidx.compose.material.icons.rounded.PhotoCamera
@@ -327,7 +326,7 @@ private fun PreviewTile(title: String, accent: Color, modifier: Modifier) {
 private val QuickAction.settingsIcon: ImageVector
     get() = when (this) {
         QuickAction.TIMER -> Icons.Rounded.HourglassBottom
-        QuickAction.STOPWATCH -> Icons.Rounded.Timer
+        QuickAction.STOPWATCH -> Icons.Rounded.HourglassBottom
         QuickAction.FLASHLIGHT -> Icons.Rounded.FlashlightOn
         QuickAction.SCREENSHOT -> Icons.Rounded.Screenshot
         QuickAction.CAMERA -> Icons.Rounded.PhotoCamera

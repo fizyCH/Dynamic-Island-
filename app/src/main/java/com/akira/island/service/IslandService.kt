@@ -18,18 +18,22 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
 import com.akira.island.core.IslandBus
 import com.akira.island.core.ServiceCommand
 import com.akira.island.core.NoticeStyle
+import com.akira.island.core.tr
 import com.akira.island.R
 import com.akira.island.core.LangScope
 import com.akira.island.data.IslandSettings
@@ -178,6 +182,11 @@ class IslandService : AccessibilityService() {
         payReader = PayScreenReader(this, scope)
         alarmMonitor = AlarmMonitor(this).also { it.start() }
         IslandBus.serviceRunning.value = true
+
+        // Если уведомление не дало кнопку «Стоп», служба сама нажмёт плитку/кнопку в системной панели.
+        // Это не прямой API (для него нужны системные права), но и не переход в настройки.
+        Controls.stopHotspotAutomation = { runSystemAutomation { stopHotspotViaQuickSettings() } }
+        Controls.stopRecordingAutomation = { info -> runSystemAutomation { stopRecordingViaShade(info) } }
 
         // Входящий смахнули — он скрыт, пока звонит; перестал звонить — следующий входящий снова в острове.
         // Здесь, а не в острове: пока остров спрятан, он не рисуется и ничего бы не сбросил
@@ -357,6 +366,169 @@ class IslandService : AccessibilityService() {
         val list = windows
         list.isEmpty() || list.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
     }.getOrDefault(true)
+
+    private var systemAutomationRunning = false
+
+    /**
+     * Автоматика для того, что не отдало кнопку в уведомлении. Android не разрешает стороннему
+     * приложению вызывать TetheringManager.stopTethering() без системного разрешения, а остановить
+     * чужую запись через API вообще нельзя. Поэтому служба открывает системную панель, нажимает
+     * нужную кнопку и закрывает её — без перехода в настройки или приложение.
+     */
+    private fun runSystemAutomation(block: suspend () -> Unit) {
+        if (systemAutomationRunning) return
+        systemAutomationRunning = true
+        scope.launch {
+            try {
+                Controls.collapse()
+                block()
+            } finally {
+                systemAutomationRunning = false
+            }
+        }
+    }
+
+    private suspend fun stopHotspotViaQuickSettings() {
+        if (!performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)) {
+            automationToast("Не удалось открыть панель быстрых настроек", "Couldn't open Quick Settings")
+            return
+        }
+        val node = awaitSystemUiNode { it.label().let { l -> hotspotWords.any { w -> w in l } } } ?:
+            awaitSystemUiNode { it.viewIdResourceName?.contains("hotspot", ignoreCase = true) == true }
+        if (node == null) {
+            closeSystemUi()
+            automationToast("Не нашёл плитку точки доступа", "Couldn't find the hotspot tile")
+            return
+        }
+        if (!clickNode(node)) {
+            closeSystemUi()
+            automationToast("Не удалось нажать точку доступа", "Couldn't tap the hotspot tile")
+            return
+        }
+        delay(500)
+        closeSystemUi()
+    }
+
+    private suspend fun stopRecordingViaShade(c: ChronoInfo) {
+        val opened = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+        } else {
+            performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+        }
+        if (!opened) {
+            automationToast("Не удалось открыть шторку", "Couldn't open the shade")
+            return
+        }
+        val title = c.title.lowercase()
+        val pkg = c.pkg.lowercase()
+        fun isStop(node: AccessibilityNodeInfo): Boolean {
+            val label = node.label()
+            if (stopWords.none { it in label }) return false
+            if (node.clickableTarget() == null) return false
+            val packageMatches = node.packageName?.toString()?.lowercase()?.let { it == pkg || pkg in it } == true
+            return packageMatches || (title.isNotBlank() && title in ancestorLabels(node))
+        }
+        val node = awaitSystemUiNode(predicate = ::isStop) ?: awaitSystemUiNode { node ->
+            stopWords.any { it in node.label() } && node.clickableTarget() != null
+        }
+        if (node == null) {
+            closeSystemUi()
+            automationToast("Не нашёл кнопку «Стоп»", "Couldn't find the Stop button")
+            return
+        }
+        if (!clickNode(node)) {
+            closeSystemUi()
+            automationToast("Не удалось остановить запись", "Couldn't stop the recording")
+            return
+        }
+        delay(450)
+        closeSystemUi()
+    }
+
+    private suspend fun awaitSystemUiNode(
+        timeoutMs: Long = 2_200L,
+        predicate: (AccessibilityNodeInfo) -> Boolean,
+    ): AccessibilityNodeInfo? {
+        val end = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < end) {
+            findSystemUiNode(predicate)?.let { return it }
+            delay(100)
+        }
+        return null
+    }
+
+    private fun findSystemUiNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        val roots = ArrayList<AccessibilityNodeInfo>(4)
+        rootInActiveWindow?.let {
+            if (it.packageName?.toString() == "com.android.systemui") roots += it
+        }
+        runCatching { windows }.getOrDefault(emptyList()).forEach { w ->
+            if (w.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+            val root = w.root ?: return@forEach
+            if (root.packageName?.toString() == packageName) return@forEach
+            if (root.packageName?.toString() == "com.android.systemui" || w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                roots += root
+            }
+        }
+        return roots.firstNotNullOfOrNull { findNode(it, predicate) }
+    }
+
+    private fun findNode(node: AccessibilityNodeInfo, predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        if (predicate(node)) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findNode(child, predicate)?.let { return it }
+        }
+        return null
+    }
+
+    private fun AccessibilityNodeInfo.label(): String =
+        listOfNotNull(text, contentDescription).joinToString(" ").lowercase()
+
+    private fun AccessibilityNodeInfo.clickableTarget(): AccessibilityNodeInfo? {
+        var n: AccessibilityNodeInfo? = this
+        repeat(8) {
+            val node = n ?: return null
+            if (node.isClickable) return node
+            n = node.parent
+        }
+        return null
+    }
+
+    private fun clickNode(node: AccessibilityNodeInfo): Boolean {
+        val target = node.clickableTarget() ?: return false
+        return target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private fun ancestorLabels(node: AccessibilityNodeInfo): String {
+        val labels = StringBuilder()
+        var n = node.parent
+        repeat(8) {
+            val parent = n ?: return labels.toString()
+            labels.append(' ').append(parent.label())
+            n = parent.parent
+        }
+        return labels.toString()
+    }
+
+    private fun closeSystemUi() {
+        val closed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        if (!closed) performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    private fun automationToast(ru: String, en: String) {
+        Toast.makeText(this, tr(ru, en), Toast.LENGTH_SHORT).show()
+    }
+
+    private val hotspotWords = listOf(
+        "hotspot", "tether", "access point", "portable hotspot", "wi-fi hotspot",
+        "точка доступа", "раздач",
+    )
+    private val stopWords = listOf(
+        "стоп", "останов", "заверш", "готов",
+        "stop", "finish", "end", "done",
+    )
 
     private fun applySettings(s: IslandSettings, landscape: Boolean) {
         visible = s.enabled && !(s.hideInLandscape && landscape) && !IslandBus.offSchedule.value
@@ -680,6 +852,8 @@ class IslandService : AccessibilityService() {
         handler.removeCallbacks(touchUpdate)
         handler.removeCallbacks(screenToneSample)
         ScreenTone.clear()
+        Controls.stopHotspotAutomation = {}
+        Controls.stopRecordingAutomation = {}
         IslandBus.egg.value = false
         IslandBus.serviceRunning.value = false
         IslandTile.refresh(this)

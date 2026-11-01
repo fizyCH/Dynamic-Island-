@@ -23,6 +23,10 @@ object Controls {
     var torchOff: () -> Unit = {}
     var torchLevel: (Int) -> Unit = {}
 
+    /** Точка доступа и запись не отдали кнопку в уведомлении — их выключает служба через Quick Settings/шторку. */
+    var stopHotspotAutomation: () -> Unit = {}
+    var stopRecordingAutomation: (ChronoInfo) -> Unit = {}
+
     fun expand(id: String) {
         IslandBus.focus.value = id
         IslandBus.expanded.value = true
@@ -204,19 +208,19 @@ object Controls {
         }
     }
 
-    /** Если у уведомления точки доступа нет действия «Отключить» — открываем её настройки. */
-    fun openHotspotSettings(context: Context) {
-        val intents = listOf(
-            Intent("android.settings.TETHER_SETTINGS"),
-            Intent(Settings.ACTION_WIRELESS_SETTINGS),
-        )
-        for (intent in intents) {
-            val ok = runCatching {
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                true
-            }.getOrDefault(false)
-            if (ok) return
-        }
+    /**
+     * Выключить точку доступа: сначала кнопка «Отключить» из уведомления, иначе автоматика
+     * через Quick Settings. В настройки не перекидываем — даже если автоматика не найдет плитку.
+     */
+    fun stopHotspot(context: Context, info: HotspotInfo) {
+        if (send(context, info.stop)) return
+        stopHotspotAutomation()
+    }
+
+    /** Остановить запись: кнопка «Стоп» из уведомления, иначе автоматика через шторку. */
+    fun stopRecording(context: Context, c: ChronoInfo) {
+        if (send(context, c.stop)) return
+        stopRecordingAutomation(c)
     }
 
     @Suppress("MissingPermission")

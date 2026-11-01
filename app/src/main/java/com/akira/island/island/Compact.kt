@@ -169,7 +169,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
                 val left = act.t.left(now)
                 val color = if (left <= 10_000 && !act.t.paused) Tints.Red else Tints.Orange
                 CompactRow(h, gap, side * 1.4f,
-                    left = { Icon(if (act.t.paused) Ios.pause else Ios.timer, null, tint = color, modifier = Modifier.size(icon)) },
+                    left = { Icon(Ios.timer, null, tint = color, modifier = Modifier.size(icon)) },
                     right = { TimeText(formatDuration(left + 999), color, 18, FontWeight.Bold) },
                 )
             }
@@ -178,7 +178,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
         is Act.StopwatchA -> {
             val now = rememberNow(250, active = act.w.running)
             CompactRow(h, gap, side * 1.4f,
-                left = { Icon(Ios.stopwatch, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
+                left = { Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
                 right = { TimeText(formatDuration(act.w.elapsed(now)), Tints.Orange, 18, FontWeight.Bold) },
             )
         }
@@ -192,8 +192,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
                 left = {
                     when {
                         recording -> Equalizer(tint, true, s.liveEqualizer, Modifier.size(h * 0.62f, h * 0.42f), bars = 5)
-                        act.c.pausedMs != null -> Icon(Ios.pause, null, tint = tint, modifier = Modifier.size(icon))
-                        else -> AppIcon(act.c.icon, h * 0.56f, Ios.timer, tint)
+                        else -> Icon(Ios.timer, null, tint = tint, modifier = Modifier.size(h * 0.56f))
                     }
                 },
                 right = { TimeText(formatDuration(act.c.elapsed(now)), tint, 18, FontWeight.Bold) },

@@ -856,9 +856,9 @@ private fun Bubble(act: Act, s: IslandSettings) {
                 )
                 Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.5f))
             }
-            is Act.StopwatchA -> Icon(Ios.stopwatch, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
+            is Act.StopwatchA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
             is Act.TorchA -> Icon(Ios.flashlight, null, tint = Tints.Yellow, modifier = Modifier.size(inner * 0.75f))
-            is Act.ChronoA -> AppIcon(act.c.icon, inner, Ios.timer, Tints.Orange)
+            is Act.ChronoA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner))
             is Act.ProgressA -> {
                 ProgressRing(act.p.fraction, Tints.Blue, Modifier.size(inner), stroke = 2.5.dp)
                 Icon(Ios.download, null, tint = Tints.Blue, modifier = Modifier.size(inner * 0.5f))
