@@ -57,8 +57,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -864,14 +862,9 @@ private fun Bubble(act: Act, s: IslandSettings) {
                 )
                 Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.5f))
             }
-            is Act.StopwatchA -> Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
+            is Act.StopwatchA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
             is Act.TorchA -> Icon(Ios.flashlight, null, tint = Tints.Yellow, modifier = Modifier.size(inner * 0.75f))
-            is Act.ChronoA -> Icon(
-                if (act.c.countDown) Ios.timer else Icons.Rounded.Flag,
-                null,
-                tint = Tints.Orange,
-                modifier = Modifier.size(inner),
-            )
+            is Act.ChronoA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner))
             is Act.ProgressA -> {
                 ProgressRing(act.p.fraction, Tints.Blue, Modifier.size(inner), stroke = 2.5.dp)
                 Icon(Ios.download, null, tint = Tints.Blue, modifier = Modifier.size(inner * 0.5f))

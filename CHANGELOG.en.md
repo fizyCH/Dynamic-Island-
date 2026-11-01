@@ -6,6 +6,15 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.24] — 2026-11-01
+
+- 🚩 **Stopwatch:** the timer icon is back, and while running the close button is replaced by a **flag button for marks**. The mark count is shown next to the time.
+- ⏸️ When paused, a close button appears; marks are kept when resumed.
+- 🕐 The timer is unchanged.
+- 🎙️ Voice recorder: pause/resume is synced, and the card no longer lingers after stopping.
+- 🔴 Screen recording: blinking dot, pause is respected.
+- 🛜 Hotspot shutdown removed from the island.
+
 ## [1.6.23] — 2026-11-01
 
 - ⏸️ **Pausing a Clock timer or stopwatch no longer closes the island**: the “(Paused)” title is recognized and the card stays open.

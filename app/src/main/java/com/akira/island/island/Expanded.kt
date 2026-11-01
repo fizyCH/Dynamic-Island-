@@ -406,21 +406,32 @@ private fun StopwatchExpanded(w: StopwatchState) {
     val now = rememberNow(100, active = w.running)
     val elapsed = w.elapsed(now)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        // Секундомер, как и таймер, начинается с флажка
-        Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(22.dp))
+        Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
         RoundButton(if (w.running) Ios.pause else Ios.play, size = 50.dp,
             bg = Tints.Orange.copy(alpha = 0.25f), fg = Tints.Orange, iconScale = 0.5f) { Controls.toggleStopwatch() }
-        // Крестик показываем только на паузе; пока идёт отсчёт, он не нужен
-        if (!w.running) {
-            Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(12.dp))
+        if (w.running) {
+            // Флажок вместо сброса: ставит метку на текущем времени
+            RoundButton(Icons.Rounded.Flag, size = 44.dp, bg = Tints.Orange.copy(alpha = 0.25f),
+                fg = Tints.Orange, iconScale = 0.52f) { Controls.lapStopwatch() }
+        } else {
             RoundButton(Ios.close, size = 44.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) {
                 Controls.stopStopwatch()
             }
         }
         Spacer(Modifier.weight(1f))
-        Text(formatDuration(elapsed) + ",%d".format((elapsed % 1000) / 100), color = Tints.Orange, fontSize = 40.sp,
-            style = Digits.copy(fontWeight = FontWeight.Normal), maxLines = 1)
+        Column(horizontalAlignment = Alignment.End) {
+            if (w.laps.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Flag, null, tint = Tints.Orange.copy(alpha = 0.7f), modifier = Modifier.size(11.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${w.laps.size}", color = Tints.Orange.copy(alpha = 0.7f), fontSize = 12.sp, style = Digits)
+                }
+            }
+            Text(formatDuration(elapsed) + ",%d".format((elapsed % 1000) / 100), color = Tints.Orange, fontSize = 40.sp,
+                style = Digits.copy(fontWeight = FontWeight.Normal), maxLines = 1)
+        }
     }
 }
 
@@ -539,7 +550,7 @@ private fun ChronoExpanded(c: ChronoInfo, s: IslandSettings) {
         return
     }
     Row(Modifier.clickable { Controls.openApp(context, c.pkg) }, verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (c.countDown) Ios.timer else Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(46.dp))
+        Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(46.dp))
         Spacer(Modifier.width(14.dp))
         Text(c.title, color = Tints.Orange, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(top = 12.dp))
@@ -572,7 +583,7 @@ private fun ClockChrono(c: ChronoInfo) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).clickable { Controls.openApp(context, c.pkg) }, horizontalAlignment = Alignment.End) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (c.countDown) Ios.timer else Icons.Rounded.Flag, null, tint = color, modifier = Modifier.size(16.dp))
+                Icon(Ios.timer, null, tint = color, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(if (paused) tr("Пауза", "Paused") else if (c.countDown) tr("Таймер", "Timer") else tr("Секундомер", "Stopwatch"),
                     color = color, fontSize = 14.sp, maxLines = 1)
@@ -774,7 +785,7 @@ private fun IdleExpanded(s: IslandSettings, battery: BatteryInfo) {
 @Composable
 private fun QuickButton(a: QuickAction, context: Context, modifier: Modifier) {
     val icon = when (a) {
-        QuickAction.STOPWATCH -> Icons.Rounded.Flag
+        QuickAction.STOPWATCH -> Ios.timer
         QuickAction.FLASHLIGHT -> Ios.flashlight
         QuickAction.SCREENSHOT -> Icons.Rounded.Screenshot
         QuickAction.CAMERA -> Icons.Rounded.PhotoCamera

@@ -29,7 +29,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.WifiTethering
@@ -180,7 +179,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
         is Act.StopwatchA -> {
             val now = rememberNow(250, active = act.w.running)
             CompactRow(h, gap, side * 1.4f,
-                left = { Icon(Icons.Rounded.Flag, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
+                left = { Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(icon)) },
                 right = { TimeText(formatDuration(act.w.elapsed(now)), Tints.Orange, 18, FontWeight.Bold) },
             )
         }
@@ -197,12 +196,7 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
                             RecordingDot(tint, !s.reduceEffects, Modifier.size(h * 0.5f))
                         recording ->
                             Icon(Icons.Rounded.Mic, null, tint = tint, modifier = Modifier.size(h * 0.5f))
-                        else -> Icon(
-                            if (act.c.countDown) Ios.timer else Icons.Rounded.Flag,
-                            null,
-                            tint = tint,
-                            modifier = Modifier.size(h * 0.56f),
-                        )
+                        else -> Icon(Ios.timer, null, tint = tint, modifier = Modifier.size(h * 0.56f))
                     }
                 },
                 right = { TimeText(formatDuration(act.c.elapsed(now)), tint, 18, FontWeight.Bold) },

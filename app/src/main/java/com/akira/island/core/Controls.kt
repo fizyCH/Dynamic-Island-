@@ -108,7 +108,17 @@ object Controls {
         // Пауза/продолжение не должны давать автосворачиванию убрать остров
         IslandBus.lastTouch = now
         IslandBus.stopwatch.value =
-            if (w.running) StopwatchState(null, w.elapsed(now)) else StopwatchState(now, w.accumulated)
+            if (w.running) StopwatchState(null, w.elapsed(now), w.laps)
+            else StopwatchState(now, w.accumulated, w.laps)
+    }
+
+    /** Поставить флажок (метку) на текущем времени секундомера. */
+    fun lapStopwatch() {
+        val w = IslandBus.stopwatch.value ?: return
+        if (!w.running) return
+        val now = SystemClock.elapsedRealtime()
+        IslandBus.lastTouch = now
+        IslandBus.stopwatch.value = w.copy(laps = w.laps + w.elapsed(now))
     }
 
     fun stopStopwatch() {
