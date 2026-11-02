@@ -22,6 +22,8 @@ object IslandBus {
 
     val serviceRunning = MutableStateFlow(false)
     val expanded = MutableStateFlow(false)
+    /** Активности временно скрыты свайпом к центру: остров показывает пустую капсулу. */
+    val activitiesHidden = MutableStateFlow(false)
     /** id активности, которую пользователь выбрал (например, кликом по пузырю) */
     val focus = MutableStateFlow<String?>(null)
 

@@ -267,17 +267,19 @@ fun IslandOverlay(
     }
     val previewing = previewNow < previewUntil
 
+    val activitiesHidden by IslandBus.activitiesHidden.collectAsState()
     // Во время подгонки размера показываем только пустую красную капсулу
     val primary = when {
         calibrating -> Act.Idle
+        activitiesHidden -> Act.Idle
         previewing -> Act.LiveA(WidthDemo)
         else -> acts.firstOrNull() ?: Act.Idle
     }
     val incoming = (primary as? Act.CallA)?.c?.incoming == true
     // Вторая активность — кружком рядом, если его не выключили в «Поведении»
-    val secondary = if (!s.bubble || primary.transient || incoming || calibrating) null
+    val secondary = if (activitiesHidden || !s.bubble || primary.transient || incoming || calibrating) null
     else acts.drop(1).firstOrNull { !it.transient && it !is Act.AlarmA }
-    val showExpanded = expanded && !primary.transient && !incoming && !calibrating
+    val showExpanded = !activitiesHidden && expanded && !primary.transient && !incoming && !calibrating
     // На паузе таймер и секундомер не должны исчезать из-за автосворачивания
     val pausedFocus = (primary as? Act.TimerA)?.t?.paused == true ||
         (primary as? Act.StopwatchA)?.w?.running == false ||
@@ -315,7 +317,8 @@ fun IslandOverlay(
         Controls.collapse()
     }
 
-    val hidden = s.hideIdle && primary is Act.Idle && !showExpanded && !calibrating
+    // Если активности скрыты вручную, пустая капсула должна остаться видимой для свайпа назад
+    val hidden = s.hideIdle && primary is Act.Idle && !showExpanded && !calibrating && !activitiesHidden
 
     // Перед сменой формы просим окно стать большим, чтобы анимация шла внутри неподвижного окна
     val transitionKey = "${primary.id}|$showExpanded|${secondary?.id}|$hidden"
@@ -609,16 +612,37 @@ private fun IslandBody(
                 val side = 56.dp.toPx()
                 var dx = 0f
                 var dy = 0f
+                var startX = 0f
+                var dragWidth = 0
                 detectDragGestures(
-                    onDragStart = {
+                    onDragStart = { start ->
                         dx = 0f
                         dy = 0f
+                        startX = start.x
+                        dragWidth = size.width
                     },
                     onDragEnd = {
                         scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.45f)) }
                         val vertical = abs(dy) > abs(dx)
+                        val horizontal = !vertical && abs(dx) > side
                         val act = current
+                        val width = dragWidth.coerceAtLeast(1)
+                        val fromLeft = startX < width * 0.35f
+                        val fromRight = startX > width * 0.65f
+                        val fromMiddle = startX in width * 0.25f..width * 0.75f
                         when {
+                            !isExpanded && horizontal && IslandBus.activitiesHidden.value && fromMiddle -> {
+                                haptic()
+                                IslandBus.activitiesHidden.value = false
+                            }
+                            !isExpanded && horizontal && !IslandBus.activitiesHidden.value &&
+                                !act.transient && act !is Act.Idle &&
+                                ((fromLeft && dx > 0) || (fromRight && dx < 0)) -> {
+                                // Свайп от края к центру прячет активность, оставляя пустую капсулу
+                                haptic()
+                                IslandBus.activitiesHidden.value = true
+                                Controls.collapse()
+                            }
                             !isExpanded && vertical && dy > threshold && settings.swipeExpand && !act.transient &&
                                 (act !is Act.Idle || settings.idleExpand) -> {
                                 haptic()
@@ -640,7 +664,7 @@ private fun IslandBody(
                                 haptic()
                                 Controls.hideIncomingCall()
                             }
-                            !isExpanded && !vertical && abs(dx) > side && act is Act.MediaA && settings.swipeTracks -> {
+                            !isExpanded && horizontal && act is Act.MediaA && settings.swipeTracks -> {
                                 haptic()
                                 // Как в ПК-версии: толкнуть влево — следующий трек
                                 if (dx < 0) Controls.next() else Controls.prev()

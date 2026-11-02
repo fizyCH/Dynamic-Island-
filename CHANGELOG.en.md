@@ -6,6 +6,14 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.27] — 2026-11-02
+
+- 🫥 **Hide the activity with an inward swipe**: the island becomes an empty capsule. Swipe left or right from the middle to bring it back.
+- 🎙️ Screen recording and voice recorder use a microphone; pause should stop the island time.
+- ⏳ Paused Clock timers and stopwatches stay in the island; Resume remains available.
+- 🚩 Stopwatch: a flag button for marks while running and a mark count.
+- 🛜 Hotspot no longer turns off from the island.
+
 ## [1.6.26] — 2026-11-01
 
 - 🎙️ **Screen recording and voice recorder:** microphone instead of a dot; pause stops the island time, including when the app removes the chronometer from its notification.
