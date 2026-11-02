@@ -6,6 +6,14 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.28] — 2026-11-02
+
+- 🖥️ **Screen recording now uses a screen icon**, while the voice recorder keeps the microphone.
+- 🎙️ For OriginOS and non-standard notifications: Clock is recognized by channel/title, and recording pause by RemoteViews, the Resume action and the chronometer.
+- ⏳ Paused timers/stopwatches stay in the island.
+- 🫥 Inward swipe hides the activity; a swipe from the middle brings it back.
+- 🚩 Stopwatch: flag button for marks while running.
+
 ## [1.6.27] — 2026-11-02
 
 - 🫥 **Hide the activity with an inward swipe**: the island becomes an empty capsule. Swipe left or right from the middle to bring it back.

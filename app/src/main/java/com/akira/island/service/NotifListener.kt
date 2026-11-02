@@ -107,8 +107,16 @@ object NotificationParser {
         }
 
         val ticking = ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false) && n.`when` > 0
+        val previousChrono = IslandBus.chrono.value[sbn.key]
+        // Некоторые прошивки (в том числе OriginOS) не дают узнать «Часы» по пакету или кладут
+        // название только в канал уведомления. Тогда распознаём по каналу/заголовку и прошлой карточке.
+        val channelLower = n.channelId.orEmpty().lowercase()
+        val titleLower = title.lowercase()
+        val clockHint = listOf("timer", "stopwatch", "таймер", "секундомер").any {
+            it in channelLower || it in titleLower
+        } || previousChrono?.let { !it.recording && (it.pause != null || it.resume != null) } == true
         // Кнопки «Часов» (пауза, продолжить, сброс) — их нажимают кнопки острова
-        val clock = ClockApps.isClock(context, sbn.packageName)
+        val clock = ClockApps.isClock(context, sbn.packageName) || clockHint
         val buttons = if (clock) ClockWords.buttons(n.actions) else emptyMap()
         // Запись экрана или голоса без chronometer-extra: считаем время от начала уведомления.
         // Статус «липкий»: если запись уже опознали, её обновления не должны её выключать.
@@ -141,7 +149,8 @@ object NotificationParser {
         val recordingBase = n.`when`.takeIf { it in 1..System.currentTimeMillis() } ?: sbn.postTime
         // Google Часы и AOSP кладут время таймера в свой RemoteViews, а не в стандартный chronometer-extra.
         // У звонящего будильника/таймера время уже не считается — его не трогаем.
-        val remote = if (clock && !ringing) ClockRemote.parse(n) else null
+        val remoteAny = if ((clock && !ringing) || recording) ClockRemote.parse(n) else null
+        val remote = if (clock && !ringing) remoteAny else null
         val remotePausedMs = remote?.pausedMs(System.currentTimeMillis())
         // Если время есть только текстом (некоторые часы так делают), берём его при явных кнопках таймера
         val textTime = if (clock && remote == null && !ticking && call == null && !isMedia && !ringing &&
@@ -157,7 +166,6 @@ object NotificationParser {
             if (looksLikeTimer(n, title)) now + time else now - time
         }
         // Таймер или секундомер «Часов» на паузе: счёт стоит, время только в тексте, а в кнопках — «Продолжить»
-        val previousChrono = IslandBus.chrono.value[sbn.key]
         // Google Часы добавляют «(Пауза)» / «(Paused)» к названию, а время могут оставить только в тексте.
         val titlePaused = recPausedText
         val pausedFromText = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
@@ -194,7 +202,8 @@ object NotificationParser {
                     recPausedText ||
                         (recPrev != null && recResume != null && recPause == null) ||
                         (recPrev?.chronometer == true && !ticking) ||
-                        (recPrev?.pausedMs != null && !ticking && recPause == null)
+                        (recPrev?.pausedMs != null && !ticking && recPause == null) ||
+                        (remoteAny != null && !remoteAny.running)
                     )
                 val nowWall = System.currentTimeMillis()
                 val base = when {
@@ -209,7 +218,7 @@ object NotificationParser {
                     else -> n.`when`
                 }
                 val recPausedMs = if (recording && recPaused) {
-                    recPrev?.pausedMs ?: recTime ?: (nowWall - base).coerceAtLeast(0L)
+                    recPrev?.pausedMs ?: remoteAny?.pausedMs(nowWall) ?: recTime ?: (nowWall - base).coerceAtLeast(0L)
                 } else {
                     null
                 }

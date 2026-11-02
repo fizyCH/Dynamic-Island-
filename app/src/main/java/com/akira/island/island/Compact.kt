@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.ScreenShare
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -193,7 +194,12 @@ fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
                 left = {
                     when {
                         recording ->
-                            Icon(Icons.Rounded.Mic, null, tint = tint, modifier = Modifier.size(h * 0.5f))
+                            Icon(
+                                if (act.c.isScreenRecording) Icons.Rounded.ScreenShare else Icons.Rounded.Mic,
+                                null,
+                                tint = tint,
+                                modifier = Modifier.size(h * 0.5f),
+                            )
                         else -> Icon(Ios.timer, null, tint = tint, modifier = Modifier.size(h * 0.56f))
                     }
                 },

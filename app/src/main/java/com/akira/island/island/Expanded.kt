@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.HeartBroken
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.ScreenShare
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.WifiTethering
@@ -519,7 +520,12 @@ private fun ChronoExpanded(c: ChronoInfo) {
     val now = rememberWallNow(500)
     if (c.isRecording) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Mic, null, tint = Tints.Red, modifier = Modifier.size(26.dp))
+            Icon(
+                if (c.isScreenRecording) Icons.Rounded.ScreenShare else Icons.Rounded.Mic,
+                null,
+                tint = Tints.Red,
+                modifier = Modifier.size(26.dp),
+            )
             Spacer(Modifier.width(12.dp))
             Text(formatDuration(c.elapsed(now)), color = Tints.Red, fontSize = 22.sp, style = Digits)
             Spacer(Modifier.weight(1f))
