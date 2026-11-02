@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Chronometer
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -128,26 +129,41 @@ object NotificationParser {
         val channelKey = "${sbn.packageName}|${n.channelId.orEmpty()}"
         val knownRecording = sbn.key in recordingKeys
         val recentChannel = (recordingChannels[channelKey] ?: 0L) > nowElapsed
+        val pkgLower = sbn.packageName.lowercase()
+        val vivoSmartShot = "smartshot" in pkgLower
+        // Vivo пишет состояние только в кастомном RemoteViews: вытаскиваем оттуда текст.
+        val remoteText = if ("record" in pkgLower || "smartshot" in pkgLower || "screen" in pkgLower) {
+            notificationText(context, n)
+        } else {
+            null
+        }
         val recText = listOfNotNull(
             title,
             n.tickerText?.toString(),
             ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
             ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
             ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+            remoteText,
         ).joinToString(" ").lowercase()
         val recPausedText = listOf("pause", "пауза", "приостанов").any { it in recText }
+        val recRunningText = listOf("record", "recording", "запис", "экран").any { it in recText } &&
+            !recPausedText
         val recTime = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT)
             .firstNotNullOfOrNull { ClockScreenParser.find(ex.getCharSequence(it)) }
+            ?: ClockScreenParser.find(remoteText)
         val recFinishedText = listOf(
             "saved", "saving", "ready", "сохран", "записан", "готов", "finished", "stopped", "останов", "заверш", "обработ",
         ).any { it in recText }
-        val pkgLower = sbn.packageName.lowercase()
-        val vivoSmartShot = "smartshot" in pkgLower
         val smartShotChrono = if (vivoSmartShot) notificationChronometer(context, n) else null
+        val smartShotText = remoteText?.let {
+            listOf("record", "recording", "запис", "screen", "экран").any { w -> w in it }
+        } == true
+        val smartShotRecording = vivoSmartShot &&
+            (smartShotChrono != null || smartShotText || previousChrono?.recording == true)
         val recordingCandidate = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
-            (recentChannel && ongoing) || (vivoSmartShot && smartShotChrono != null)
+            (recentChannel && ongoing) || smartShotRecording
         val recording = recordingCandidate && !recFinishedText &&
-            (ongoing || recPausedText) && (!vivoSmartShot || smartShotChrono != null)
+            (ongoing || recPausedText) && (!vivoSmartShot || smartShotRecording)
         // Некоторые прошивки (OriginOS и др.) не дают время в extras: Chronometer живёт в RemoteViews.
         val uiChrono = smartShotChrono ?: if (recording || clock) notificationChronometer(context, n) else null
         if (recording) {
@@ -217,11 +233,14 @@ object NotificationParser {
                 val whenChanged = vivoRecording && recPrev != null &&
                     n.`when` > 0 && n.`when` != recPrev.notificationWhen
                 val recPaused = recording && when {
-                    // Индикатор Chronometer в RemoteViews самый точный
-                    uiChrono != null -> uiChrono.first
-                    recPausedText || (recPrev != null && recResume != null && recPause == null) -> true
+                    recPausedText -> true
+                    // В RemoteViews явно написано «Запись» — значит, уже идёт
+                    recRunningText -> false
                     // Vivo меняет when при паузе и продолжении
                     whenChanged -> recPrev?.pausedMs == null
+                    // Индикатор Chronometer в RemoteViews
+                    uiChrono != null -> uiChrono.first
+                    recPrev != null && recResume != null && recPause == null -> true
                     recPrev?.pausedMs != null -> true
                     else -> (recPrev?.chronometer == true && !ticking) ||
                         (remoteAny != null && !remoteAny.running && recPause == null)
@@ -263,7 +282,7 @@ object NotificationParser {
                     pausedMs = pausedMs ?: recPausedMs, pause = if (recording) recPause else buttons[ClockAction.PAUSE],
                     resume = if (recording) recResume else buttons[ClockAction.START],
                     reset = buttons[ClockAction.RESET], recording = recording, chronometer = ticking,
-                    notificationWhen = n.`when`))
+                    notificationWhen = n.`when`, lap = buttons[ClockAction.LAP]))
             } else {
                 remove(sbn.key)
             }
@@ -325,6 +344,24 @@ object NotificationParser {
             }
         }
         return null
+    }
+
+    /** Весь видимый текст RemoteViews — Vivo пишет в него «Пауза»/«Запись». */
+    private fun notificationText(context: Context, n: Notification): String? {
+        val remote = listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView).firstOrNull() ?: return null
+        val root = runCatching { remote.apply(context, FrameLayout(context)) }.getOrNull() ?: return null
+        val out = StringBuilder()
+        collectText(root, out)
+        return out.toString().lowercase().takeIf { it.isNotBlank() }
+    }
+
+    private fun collectText(view: View, out: StringBuilder) {
+        if (view is TextView && view.visibility == View.VISIBLE) {
+            view.text?.toString()?.takeIf { it.isNotBlank() }?.let { out.append(' ').append(it) }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) collectText(view.getChildAt(i), out)
+        }
     }
 
     /** Действие уведомления по словам в подписи — для паузы и продолжения записи. */

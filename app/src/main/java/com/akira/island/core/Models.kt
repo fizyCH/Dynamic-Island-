@@ -97,6 +97,10 @@ data class ChronoInfo(
     val chronometer: Boolean = false,
     /** Notification.when последнего обновления — у Vivo по его смене ловим паузу/продолжение */
     val notificationWhen: Long = 0L,
+    /** Количество кругов/флажков, прочитанных из «Часов» */
+    val flags: Int = 0,
+    /** Кнопка «Флажок»/«Круг» из уведомления, если приложение её отдаёт */
+    val lap: PendingIntent? = null,
 ) {
     fun elapsed(nowWall: Long): Long = pausedMs ?: if (countDown) (base - nowWall).coerceAtLeast(0) else nowWall - base
 

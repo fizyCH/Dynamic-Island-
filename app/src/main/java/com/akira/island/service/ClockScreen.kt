@@ -123,13 +123,14 @@ object ClockRemote {
 }
 
 /** Что делает кнопка «Часов». */
-enum class ClockAction { START, PAUSE, RESET }
+enum class ClockAction { START, PAUSE, RESET, LAP }
 
 /** Подписи кнопок «Часов» — для нажатий на экране, кнопок уведомления и поиска кнопки, которую нажмёт остров. */
 object ClockWords {
     private val start = listOf("старт", "start", "начать", "пуск", "запуст", "продолж", "возобнов", "resume")
     private val pause = setOf("пауза", "pause", "стоп", "stop")
     private val reset = listOf("сброс", "reset", "удал", "delete", "отмен", "cancel", "очист", "clear")
+    private val lap = listOf("флаж", "круг", "отмет", "lap", "flag", "split", "mark")
     private val nonLetters = Regex("[^\\p{L}]+")
 
     /** Кнопки на экране «Часов», которые остров ищет и нажимает сам, — подпись целиком. */
@@ -137,12 +138,14 @@ object ClockWords {
         ClockAction.START to listOf("Старт", "Начать", "Продолжить", "Пуск", "Возобновить", "Start", "Resume"),
         ClockAction.PAUSE to listOf("Пауза", "Стоп", "Pause", "Stop"),
         ClockAction.RESET to listOf("Сбросить", "Сброс", "Удалить", "Reset", "Delete"),
+        ClockAction.LAP to listOf("Флажок", "Круг", "Отметка", "Lap", "Flag", "Split"),
     )
 
     /** По началу слова; «стоп» — только целым словом, иначе совпадёт «Stopwatch». */
     fun action(label: CharSequence?): ClockAction? {
         val words = label?.toString()?.lowercase()?.split(nonLetters)?.filter { it.isNotEmpty() } ?: return null
         return when {
+            words.any { w -> lap.any { it in w } } -> ClockAction.LAP
             words.any { w -> reset.any { w.startsWith(it) } } -> ClockAction.RESET
             words.any { w -> w in pause || w.startsWith("приостанов") } -> ClockAction.PAUSE
             words.any { w -> start.any { w.startsWith(it) } } -> ClockAction.START
@@ -227,6 +230,8 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
     private var stopwatch: Track? = null
     private var timerMisses = 0
     private var stopwatchMisses = 0
+    /** Сколько кругов/флажков показывает секундомер «Часов» */
+    private var lapCount = 0
     private val labels = HashMap<String, String>()
 
     /** Кнопку нажимает сам остров: какую, для таймера или секундомера, до какого времени ждать и открыл ли «Часы» он сам */
@@ -313,7 +318,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
      * открывал их сам, возвращает вас обратно. [own] — таймер прочитан с экрана, его ведёт этот класс.
      */
     fun control(pkg: String, isTimer: Boolean, action: ClockAction, own: Boolean) {
-        if (own) {
+        if (own && action != ClockAction.LAP) {
             val wall = System.currentTimeMillis()
             val next = (if (isTimer) timer else stopwatch)?.let { apply(it, isTimer, action, wall) }
             if (isTimer) timer = next else stopwatch = next
@@ -344,6 +349,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
             ClockAction.PAUSE -> pausedTrack(t, value)
             ClockAction.START -> Track(t.key, if (isTimer) wall + value else wall - value, null)
             ClockAction.RESET -> null
+            ClockAction.LAP -> t
         }
     }
 
@@ -370,6 +376,19 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         val s = main?.let { seen[it.key] }
         val running = s != null && s.kind != null && now - s.changedAt < 1_200
         val known = running || now - openedAt > 1_300
+        if (p.action == ClockAction.LAP) {
+            val button = findButton(root, ClockAction.LAP) ?: return
+            if (!click(button.node)) return
+            pending = null
+            if (p.opened) {
+                scope.launch {
+                    delay(600)
+                    runCatching { tick() }
+                    service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                }
+            }
+            return
+        }
         when (p.action) {
             ClockAction.PAUSE, ClockAction.START -> {
                 val button = findButton(root, p.action) ?: return
@@ -389,6 +408,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
                 }
                 if (!click(button.node)) return
             }
+            ClockAction.LAP -> Unit
         }
         // Что нажали, знаем сами — не ждём, придёт ли от «Часов» сообщение о нажатии (Compose его не шлёт)
         hint = p.action
@@ -431,6 +451,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
                         ClockAction.PAUSE -> toggle || "pause" in id || ("stop" in id && "stopwatch" !in id)
                         ClockAction.START -> toggle || "start" in id || "resume" in id || "play" in id
                         ClockAction.RESET -> "reset" in id || "delete" in id || "clear" in id
+                        ClockAction.LAP -> "lap" in id || "flag" in id || "split" in id || "mark" in id
                     }
                     if (match) {
                         byId = n
@@ -647,6 +668,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         val root = service.rootInActiveWindow?.takeIf { it.packageName?.toString() == pkg } ?: windowRoot(pkg) ?: return
         val found = ArrayList<Display>()
         val tabs = arrayOfNulls<Kind>(1)
+        lapCount = 0
         collect(root, found, tabs, 0, HashMap())
         tab = tabs[0]
         @Suppress("DEPRECATION")
@@ -669,6 +691,8 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         val text = (node.text ?: node.contentDescription)?.toString()?.trim().orEmpty()
         var keep = false
         if (text.isNotEmpty() && node.isVisibleToUser) {
+            Regex("""(?i)(?:круг|lap|флаж|отмет|split)\s*(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+                ?.let { lapCount = maxOf(lapCount, it) }
             if (ClockScreenParser.parse(text) != null) {
                 val b = Rect()
                 node.getBoundsInScreen(b)
@@ -731,7 +755,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         if (w != null) {
             val old = map[STOPWATCH_KEY]
             map[STOPWATCH_KEY] = ChronoInfo(STOPWATCH_KEY, pkg, tr("Секундомер · $label", "Stopwatch · $label"), icon, w.base, false,
-                old?.postTime ?: System.currentTimeMillis(), pausedMs = w.pausedMs)
+                old?.postTime ?: System.currentTimeMillis(), pausedMs = w.pausedMs, flags = lapCount)
         } else {
             map.remove(STOPWATCH_KEY)
         }
@@ -791,12 +815,16 @@ object ClockControl {
 
     fun reset(context: Context, c: ChronoInfo) = act(context, c, ClockAction.RESET)
 
+    /** Поставить флажок/круг в секундомере «Часов». */
+    fun lap(context: Context, c: ChronoInfo) = act(context, c, ClockAction.LAP)
+
     private fun act(context: Context, c: ChronoInfo, action: ClockAction) {
         val own = c.key.startsWith(ClockScreenReader.KEY_PREFIX)
         val intent = when (action) {
             ClockAction.START -> c.resume
             ClockAction.PAUSE -> c.pause
             ClockAction.RESET -> c.reset
+            ClockAction.LAP -> c.lap
         }
         if (!own && intent != null && SettingsRepo.current.clockAutoTap && Controls.send(context, intent)) {
             optimistic(c, action)
@@ -820,6 +848,7 @@ object ClockControl {
             ClockAction.PAUSE -> c.copy(pausedMs = value)
             ClockAction.START -> c.copy(pausedMs = null, base = if (c.countDown) now + value else now - value)
             ClockAction.RESET -> null
+            ClockAction.LAP -> c
         }
         IslandBus.chrono.value = if (next == null) IslandBus.chrono.value - c.key else IslandBus.chrono.value + (c.key to next)
     }

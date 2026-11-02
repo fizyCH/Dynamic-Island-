@@ -581,6 +581,8 @@ private fun ClockChrono(c: ChronoInfo) {
         if (!c.countDown && !paused) {
             RoundButton(Icons.Rounded.Flag, size = 44.dp, bg = color.copy(alpha = 0.25f), fg = color, iconScale = 0.52f) {
                 flags++
+                // Метка ставится в самих «Часах», откуда остров читает круги
+                ClockControl.lap(context, c)
             }
         } else {
             RoundButton(if (c.countDown) Ios.close else Ios.refresh, size = 50.dp, bg = Color.White.copy(alpha = 0.2f),
@@ -596,11 +598,12 @@ private fun ClockChrono(c: ChronoInfo) {
                 Spacer(Modifier.width(5.dp))
                 Text(if (paused) tr("Пауза", "Paused") else if (c.countDown) tr("Таймер", "Timer") else tr("Секундомер", "Stopwatch"),
                     color = color, fontSize = 14.sp, maxLines = 1)
-                if (!c.countDown && flags > 0) {
+                val shownFlags = maxOf(flags, c.flags)
+                if (!c.countDown && shownFlags > 0) {
                     Spacer(Modifier.width(5.dp))
                     Icon(Icons.Rounded.Flag, null, tint = color.copy(alpha = 0.7f), modifier = Modifier.size(11.dp))
                     Spacer(Modifier.width(2.dp))
-                    Text("$flags", color = color.copy(alpha = 0.7f), fontSize = 12.sp, style = Digits)
+                    Text("$shownFlags", color = color.copy(alpha = 0.7f), fontSize = 12.sp, style = Digits)
                 }
             }
             val text = if (c.countDown) formatDuration(value + 999) else formatDuration(value) + ",%d".format((value % 1000) / 100)

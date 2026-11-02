@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.31] — 2026-11-02
+
+- 🎙️ Vivo SmartShot and voice recorder: state is read from RemoteViews text (“Recording”/“Paused”), time and `when`; pause and resume should work both ways.
+- 🔴 SmartShot screen recording shows the blinking dot; the voice recorder uses the microphone.
+- 🚩 The Clock stopwatch flag now taps the flag in Clock itself and reads the lap count from there.
+- ⏳ Paused timers/stopwatches stay in the island.
+
 ## [1.6.30] — 2026-11-02
 
 - 🎥 **Vivo SmartShot/screen recording** is recognized as screen recording: blinking dot instead of the microphone.
