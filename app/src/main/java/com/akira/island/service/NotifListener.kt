@@ -8,6 +8,10 @@ import android.os.SystemClock
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Chronometer
+import android.widget.FrameLayout
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -140,6 +144,8 @@ object NotificationParser {
         val recordingCandidate = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
             (recentChannel && ongoing)
         val recording = recordingCandidate && !recFinishedText && (ongoing || recPausedText)
+        // Некоторые прошивки (OriginOS и др.) не дают время в extras: Chronometer живёт в RemoteViews.
+        val uiChrono = if (recording || clock) notificationChronometer(context, n) else null
         if (recording) {
             recordingKeys += sbn.key
             recordingChannels[channelKey] = nowElapsed + 15_000L
@@ -184,6 +190,11 @@ object NotificationParser {
                     ?: if (!looksLikeTimer(n, title)) (System.currentTimeMillis() - n.`when`).coerceAtLeast(0) else null
             clock && titlePaused ->
                 previousChrono?.pausedMs ?: previousChrono?.elapsed(System.currentTimeMillis()) ?: pausedFromText
+            clock && uiChrono?.first == true ->
+                uiChrono.second
+                    ?: previousChrono?.pausedMs
+                    ?: previousChrono?.elapsed(System.currentTimeMillis())
+                    ?: pausedFromText
             else -> null
         }
         val chrono = call == null && !isMedia &&
@@ -198,13 +209,15 @@ object NotificationParser {
                 } else {
                     null
                 }
-                val recPaused = recording && (
-                    recPausedText ||
-                        (recPrev != null && recResume != null && recPause == null) ||
-                        (recPrev?.chronometer == true && !ticking) ||
-                        (recPrev?.pausedMs != null && !ticking && recPause == null) ||
-                        (remoteAny != null && !remoteAny.running)
-                    )
+                val recPaused = recording && when {
+                    recPausedText || (recPrev != null && recResume != null && recPause == null) -> true
+                    // Индикатор Chronometer в RemoteViews — точнее, чем «пропал ли extra»:
+                    // он снова true после продолжения записи.
+                    uiChrono != null -> uiChrono.first
+                    else -> (recPrev?.chronometer == true && !ticking) ||
+                        (recPrev?.pausedMs != null && !ticking && recResume != null && recPause == null) ||
+                        (remoteAny != null && !remoteAny.running && recPause == null)
+                }
                 val nowWall = System.currentTimeMillis()
                 val base = when {
                     // При паузе диктофон иногда обновляет notification.when; не начинаем отсчёт с нуля.
@@ -218,7 +231,11 @@ object NotificationParser {
                     else -> n.`when`
                 }
                 val recPausedMs = if (recording && recPaused) {
-                    recPrev?.pausedMs ?: remoteAny?.pausedMs(nowWall) ?: recTime ?: (nowWall - base).coerceAtLeast(0L)
+                    uiChrono?.second
+                        ?: recPrev?.pausedMs
+                        ?: remoteAny?.pausedMs(nowWall)
+                        ?: recTime
+                        ?: (nowWall - base).coerceAtLeast(0L)
                 } else {
                     null
                 }
@@ -260,6 +277,41 @@ object NotificationParser {
             if (PayMonitor.onNotification(context, sbn)) return
             Messages.maybeShow(service, sbn, appLabel(context, sbn.packageName))
         }
+    }
+
+    /**
+     * Chronometer из RemoteViews: многие прошивки не кладут время/паузу в extras.
+     * Возвращает «стоит ли на паузе» и показанное время.
+     */
+    private fun notificationChronometer(context: Context, n: Notification): Pair<Boolean, Long?>? {
+        val remote = listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView).firstOrNull() ?: return null
+        val root = runCatching { remote.apply(context, FrameLayout(context)) }.getOrNull() ?: return null
+        val chrono = findChronometer(root) ?: return null
+        val shown = ClockScreenParser.find(chrono.text)
+        return !chronometerStarted(chrono) to shown
+    }
+
+    /** isStarted() у Chronometer скрыт в SDK — читаем аккуратно, иначе считаем, что идёт. */
+    private fun chronometerStarted(chrono: Chronometer): Boolean {
+        runCatching {
+            return chrono.javaClass.getMethod("isStarted").invoke(chrono) as Boolean
+        }
+        runCatching {
+            val field = chrono.javaClass.getDeclaredField("mStarted")
+            field.isAccessible = true
+            return field.getBoolean(chrono)
+        }
+        return true
+    }
+
+    private fun findChronometer(view: View): Chronometer? {
+        if (view is Chronometer) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findChronometer(view.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     /** Действие уведомления по словам в подписи — для паузы и продолжения записи. */

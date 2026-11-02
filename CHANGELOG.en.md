@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.29] — 2026-11-02
+
+- 🔴 **Screen recording uses the blinking dot again**, while the voice recorder uses the microphone.
+- ⏯️ **Recording pause** is read from the Chronometer in RemoteViews; after resuming, time runs again instead of staying frozen.
+- 🎙️ OriginOS: voice-recorder/screen-recording pause is detected from RemoteViews, actions and the chronometer; Clock is recognized by channel/title.
+- ⏳ Paused timers/stopwatches stay in the island.
+
 ## [1.6.28] — 2026-11-02
 
 - 🖥️ **Screen recording now uses a screen icon**, while the voice recorder keeps the microphone.
