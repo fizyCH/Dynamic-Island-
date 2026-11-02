@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.30] — 2026-11-02
+
+- 🎥 **Vivo SmartShot/screen recording** is recognized as screen recording: blinking dot instead of the microphone.
+- 🎙️ **Vivo voice recorder** (`com.vivo.soundrecorder`) and SmartShot: pause/resume is detected from changes in `notification.when`, RemoteViews and the chronometer; time runs again after resume.
+- ⏳ Paused timers/stopwatches stay in the island.
+- 🫥 Swipe-to-hide/show activities.
+
 ## [1.6.29] — 2026-11-02
 
 - 🔴 **Screen recording uses the blinking dot again**, while the voice recorder uses the microphone.

@@ -141,11 +141,15 @@ object NotificationParser {
         val recFinishedText = listOf(
             "saved", "saving", "ready", "сохран", "записан", "готов", "finished", "stopped", "останов", "заверш", "обработ",
         ).any { it in recText }
+        val pkgLower = sbn.packageName.lowercase()
+        val vivoSmartShot = "smartshot" in pkgLower
+        val smartShotChrono = if (vivoSmartShot) notificationChronometer(context, n) else null
         val recordingCandidate = knownRecording || isRecordingNotification(sbn, n, ex, title) ||
-            (recentChannel && ongoing)
-        val recording = recordingCandidate && !recFinishedText && (ongoing || recPausedText)
+            (recentChannel && ongoing) || (vivoSmartShot && smartShotChrono != null)
+        val recording = recordingCandidate && !recFinishedText &&
+            (ongoing || recPausedText) && (!vivoSmartShot || smartShotChrono != null)
         // Некоторые прошивки (OriginOS и др.) не дают время в extras: Chronometer живёт в RemoteViews.
-        val uiChrono = if (recording || clock) notificationChronometer(context, n) else null
+        val uiChrono = smartShotChrono ?: if (recording || clock) notificationChronometer(context, n) else null
         if (recording) {
             recordingKeys += sbn.key
             recordingChannels[channelKey] = nowElapsed + 15_000L
@@ -209,13 +213,17 @@ object NotificationParser {
                 } else {
                     null
                 }
+                val vivoRecording = pkgLower == "com.vivo.soundrecorder" || "smartshot" in pkgLower
+                val whenChanged = vivoRecording && recPrev != null &&
+                    n.`when` > 0 && n.`when` != recPrev.notificationWhen
                 val recPaused = recording && when {
-                    recPausedText || (recPrev != null && recResume != null && recPause == null) -> true
-                    // Индикатор Chronometer в RemoteViews — точнее, чем «пропал ли extra»:
-                    // он снова true после продолжения записи.
+                    // Индикатор Chronometer в RemoteViews самый точный
                     uiChrono != null -> uiChrono.first
+                    recPausedText || (recPrev != null && recResume != null && recPause == null) -> true
+                    // Vivo меняет when при паузе и продолжении
+                    whenChanged -> recPrev?.pausedMs == null
+                    recPrev?.pausedMs != null -> true
                     else -> (recPrev?.chronometer == true && !ticking) ||
-                        (recPrev?.pausedMs != null && !ticking && recResume != null && recPause == null) ||
                         (remoteAny != null && !remoteAny.running && recPause == null)
                 }
                 val nowWall = System.currentTimeMillis()
@@ -235,7 +243,11 @@ object NotificationParser {
                         ?: recPrev?.pausedMs
                         ?: remoteAny?.pausedMs(nowWall)
                         ?: recTime
-                        ?: (nowWall - base).coerceAtLeast(0L)
+                        ?: if (whenChanged && n.`when` > (recPrev?.base ?: Long.MAX_VALUE)) {
+                            (n.`when` - recPrev.base).coerceAtLeast(0L)
+                        } else {
+                            (nowWall - base).coerceAtLeast(0L)
+                        }
                 } else {
                     null
                 }
@@ -250,7 +262,8 @@ object NotificationParser {
                 put(sbn.key, ChronoInfo(sbn.key, sbn.packageName, title, icon(context, sbn.packageName), base, down, sbn.postTime, stop,
                     pausedMs = pausedMs ?: recPausedMs, pause = if (recording) recPause else buttons[ClockAction.PAUSE],
                     resume = if (recording) recResume else buttons[ClockAction.START],
-                    reset = buttons[ClockAction.RESET], recording = recording, chronometer = ticking))
+                    reset = buttons[ClockAction.RESET], recording = recording, chronometer = ticking,
+                    notificationWhen = n.`when`))
             } else {
                 remove(sbn.key)
             }

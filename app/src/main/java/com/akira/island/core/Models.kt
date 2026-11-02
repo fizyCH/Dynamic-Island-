@@ -95,6 +95,8 @@ data class ChronoInfo(
     val recording: Boolean = false,
     /** У уведомления был chronometer-extra — по его исчезновению ловим паузу записи */
     val chronometer: Boolean = false,
+    /** Notification.when последнего обновления — у Vivo по его смене ловим паузу/продолжение */
+    val notificationWhen: Long = 0L,
 ) {
     fun elapsed(nowWall: Long): Long = pausedMs ?: if (countDown) (base - nowWall).coerceAtLeast(0) else nowWall - base
 
@@ -120,7 +122,7 @@ data class ChronoInfo(
             if (!isRecording) return false
             val p = pkg.lowercase()
             val t = title.lowercase()
-            return p == "com.android.systemui" || "screen" in p || "screen" in t || "экран" in t
+            return p == "com.android.systemui" || "smartshot" in p || "screen" in p || "screen" in t || "экран" in t
         }
 
     /** Диктофон: кнопку «Стоп» в острове не показываем, только синхронное время. */
