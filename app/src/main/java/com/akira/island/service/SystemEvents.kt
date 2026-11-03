@@ -206,7 +206,7 @@ class SystemEvents(private val context: Context) {
                             tr("Энергосбережение", "Power saving"),
                             if (on) tr("Вкл", "On") else tr("Выкл", "Off"),
                             ic(if (on) R.drawable.ios_battery_full else R.drawable.ios_battery_dead),
-                            if (on) Tints.Green else Tints.Gray,
+                            if (on) Tints.Orange else Tints.Gray,
                         ),
                     )
                 }

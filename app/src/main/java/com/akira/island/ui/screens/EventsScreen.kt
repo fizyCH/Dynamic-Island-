@@ -63,7 +63,7 @@ fun EventsScreen(onBack: () -> Unit) {
 
         GroupToggle(Pos.Single, Icons.Rounded.BatterySaver, tr("Энергосбережение", "Power saving"),
             tr("Когда Android включает или выключает экономию заряда", "When Android turns battery saver on or off"),
-            s.evPowerSave, color = Tile.Green) { set { copy(evPowerSave = it) } }
+            s.evPowerSave, color = Tile.Orange) { set { copy(evPowerSave = it) } }
 
         SectionHeader(tr("Подключения", "Connections"))
         Group {

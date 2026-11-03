@@ -6,6 +6,12 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.33] — 2026-11-03
+
+- 🟢 The privacy indicator is now **vertically centered** on the camera/capsule; its right-of-camera horizontal position is unchanged.
+- 🟠 The power-saving event is now orange instead of green (including its Events tile).
+- ⏸️ The recording/voice-recorder card stays in the island while paused.
+
 ## [1.6.32] — 2026-11-03
 
 - 🔋 **Low battery**: the threshold is configurable in Events → Battery, 20% by default.

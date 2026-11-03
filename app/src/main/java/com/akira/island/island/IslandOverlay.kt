@@ -378,7 +378,10 @@ fun IslandOverlay(
             Box(
                 Modifier
                     .align(Alignment.TopCenter)
-                    .offset(x = (s.cameraGap.dp / 2 + 9.dp), y = (s.height.dp / 2 - 4.dp))
+                    .offset(
+                        x = (s.cameraGap.dp / 2 + 9.dp),
+                        y = (ISLAND_PAD_DP.dp + s.height.dp / 2 - 3.5f.dp),
+                    )
                     .size(7.dp)
                     .clip(CircleShape)
                     .background(privacyColor),
