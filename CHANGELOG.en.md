@@ -6,6 +6,14 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.32] — 2026-11-03
+
+- 🔋 **Low battery**: the threshold is configurable in Events → Battery, 20% by default.
+- ⚡ **Power saving**: an event appears in the island when it turns on/off; can be disabled in Events.
+- 🟢 **Privacy indicator to the right of the camera**: green for the camera, orange for the microphone.
+- ⏸️ Pausing recording/voice recorder no longer closes the activity: the card stays and time freezes.
+- 🚩 The stopwatch flag is placed in Clock, and the lap count is read from there.
+
 ## [1.6.31] — 2026-11-02
 
 - 🎙️ Vivo SmartShot and voice recorder: state is read from RemoteViews text (“Recording”/“Paused”), time and `when`; pause and resume should work both ways.

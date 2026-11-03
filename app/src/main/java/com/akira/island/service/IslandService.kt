@@ -84,6 +84,7 @@ class IslandService : AccessibilityService() {
     private var clockReader: ClockScreenReader? = null
     private var payReader: PayScreenReader? = null
     private var alarmMonitor: AlarmMonitor? = null
+    private var privacy: PrivacyMonitor? = null
     private var screenEvents = false
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
     /** Экран блокировки был на экране — ждём, когда он уйдёт, чтобы сразу показать разблокировку */
@@ -181,6 +182,7 @@ class IslandService : AccessibilityService() {
         clockReader = ClockScreenReader(this, scope).also { ClockControl.reader = it }
         payReader = PayScreenReader(this, scope)
         alarmMonitor = AlarmMonitor(this).also { it.start() }
+        privacy = PrivacyMonitor(this).also { it.start() }
         IslandBus.serviceRunning.value = true
 
         // Если запись не дала кнопку «Стоп», служба сама нажмёт её в системной шторке.
@@ -838,6 +840,7 @@ class IslandService : AccessibilityService() {
         payReader?.stop()
         ClockControl.reader = null
         alarmMonitor?.stop()
+        privacy?.stop()
         WallpaperTone.stop(this)
         scope.cancel()
         touch?.let { runCatching { wm?.removeView(it) } }

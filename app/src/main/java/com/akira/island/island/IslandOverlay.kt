@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -139,6 +140,8 @@ fun IslandOverlay(
 ) {
     val saved by SettingsRepo.state.collectAsState()
     val powerSave by IslandBus.powerSave.collectAsState()
+    val privacyCamera by IslandBus.privacyCamera.collectAsState()
+    val privacyMic by IslandBus.privacyMic.collectAsState()
     // В энергосбережении Android с «Экономией заряда» остров обходится без живых эффектов
     val s = remember(saved, powerSave) { saved.forPowerSave(powerSave) }
     val media by IslandBus.media.collectAsState()
@@ -364,6 +367,22 @@ fun IslandOverlay(
             exit = if (s.reduceEffects) fadeOut() else scaleOut(islandSpec(s), targetScale = 0.3f, transformOrigin = top) + fadeOut(tween(160)),
         ) {
             IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, onBody, onBubble)
+        }
+        // Индикатор приватности справа от камеры: камера — зелёный, микрофон — оранжевый
+        val privacyColor = when {
+            privacyCamera -> Tints.Green
+            privacyMic -> Tints.Orange
+            else -> null
+        }
+        if (privacyColor != null && !calibrating) {
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(x = (s.cameraGap.dp / 2 + 9.dp), y = (s.height.dp / 2 - 4.dp))
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(privacyColor),
+            )
         }
         if (eggOn) {
             EggSparks { body.value }

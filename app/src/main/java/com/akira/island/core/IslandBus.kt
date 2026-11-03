@@ -62,6 +62,10 @@ object IslandBus {
     val offSchedule = MutableStateFlow(false)
     /** Экран включён. Пока он погашен, датчик наклона и чтение экрана навигатора не работают — бережём батарею */
     val screenOn = MutableStateFlow(true)
+    /** Камера сейчас используется — зелёная точка у камеры */
+    val privacyCamera = MutableStateFlow(false)
+    /** Микрофон сейчас используется — оранжевая точка у камеры */
+    val privacyMic = MutableStateFlow(false)
     /** Включено энергосбережение Android — с «Экономией заряда» остров без живых эффектов */
     val powerSave = MutableStateFlow(false)
     /** Телефон заблокирован PIN-кодом, графическим ключом или паролем: тексты сообщений и кнопки скрыты */

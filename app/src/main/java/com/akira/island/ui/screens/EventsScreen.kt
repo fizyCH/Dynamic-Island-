@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.AirplanemodeActive
 import androidx.compose.material.icons.rounded.AirplanemodeInactive
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.BluetoothConnected
 import androidx.compose.material.icons.rounded.BluetoothDisabled
 import androidx.compose.material.icons.rounded.Bolt
@@ -28,6 +29,7 @@ import com.akira.island.core.tr
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
 import com.akira.island.ui.Group
+import com.akira.island.ui.GroupSlider
 import com.akira.island.ui.GroupToggle
 import com.akira.island.ui.Page
 import com.akira.island.ui.Pos
@@ -47,10 +49,21 @@ fun EventsScreen(onBack: () -> Unit) {
                 s.evChargeStart, color = Tile.Green) { set { copy(evChargeStart = it) } }
             GroupToggle(Pos.Middle, Icons.Rounded.PowerOff, tr("Зарядка остановлена", "Charging stopped"), null,
                 s.evChargeStop, color = Tile.Gray) { set { copy(evChargeStop = it) } }
-            GroupToggle(Pos.Last, Icons.Rounded.BatteryAlert, tr("Низкий заряд", "Low battery"),
-                tr("Когда заряд батареи падает до 5%", "When the battery drops to 5%"),
+            GroupToggle(if (s.evLowBattery) Pos.Middle else Pos.Last, Icons.Rounded.BatteryAlert, tr("Низкий заряд", "Low battery"),
+                tr("Когда заряд падает до ${s.batteryThreshold}%", "When the battery drops to ${s.batteryThreshold}%"),
                 s.evLowBattery, color = Tile.Red) { set { copy(evLowBattery = it) } }
+            if (s.evLowBattery) {
+                GroupSlider(
+                    Pos.Last, Icons.Rounded.BatteryAlert, tr("Порог низкого заряда", "Low battery threshold"),
+                    value = s.batteryThreshold.toFloat(), range = 5f..50f, steps = 8,
+                    label = "${s.batteryThreshold}%", color = Tile.Red,
+                ) { v -> set { copy(batteryThreshold = v.toInt()) } }
+            }
         }
+
+        GroupToggle(Pos.Single, Icons.Rounded.BatterySaver, tr("Энергосбережение", "Power saving"),
+            tr("Когда Android включает или выключает экономию заряда", "When Android turns battery saver on or off"),
+            s.evPowerSave, color = Tile.Green) { set { copy(evPowerSave = it) } }
 
         SectionHeader(tr("Подключения", "Connections"))
         Group {

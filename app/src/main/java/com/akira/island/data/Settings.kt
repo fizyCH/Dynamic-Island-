@@ -131,6 +131,9 @@ data class IslandSettings(
     val evChargeStart: Boolean = true,
     val evChargeStop: Boolean = true,
     val evLowBattery: Boolean = true,
+    /** При каком уровне заряда показывать «Низкий заряд» */
+    val batteryThreshold: Int = 20,
+    val evPowerSave: Boolean = true,
     val evWifiOn: Boolean = true,
     val evWifiOff: Boolean = true,
     val evHeadsetOn: Boolean = true,

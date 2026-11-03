@@ -195,8 +195,22 @@ class SystemEvents(private val context: Context) {
                 IslandBus.keyguard.value = isKeyguard()
             }
 
-            PowerManager.ACTION_POWER_SAVE_MODE_CHANGED ->
-                IslandBus.powerSave.value = context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+            PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
+                val on = context.getSystemService(PowerManager::class.java)?.isPowerSaveMode == true
+                val was = IslandBus.powerSave.value
+                IslandBus.powerSave.value = on
+                if (on != was) {
+                    notice(
+                        s.evPowerSave,
+                        Notice(
+                            tr("Энергосбережение", "Power saving"),
+                            if (on) tr("Вкл", "On") else tr("Выкл", "Off"),
+                            ic(if (on) R.drawable.ios_battery_full else R.drawable.ios_battery_dead),
+                            if (on) Tints.Green else Tints.Gray,
+                        ),
+                    )
+                }
+            }
 
             NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED -> {
                 val on = isDnd()
@@ -326,7 +340,8 @@ class SystemEvents(private val context: Context) {
             (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
         IslandBus.battery.value = BatteryInfo(level, charging)
 
-        if (charging || level > 5) {
+        val threshold = s.batteryThreshold.coerceIn(5, 50)
+        if (charging || level > threshold) {
             lowWarned = false
         } else if (level >= 0 && !lowWarned) {
             lowWarned = true

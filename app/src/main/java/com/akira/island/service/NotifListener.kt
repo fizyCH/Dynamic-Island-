@@ -522,9 +522,9 @@ object NotificationParser {
         if (key in IslandBus.calls.value) IslandBus.calls.value = IslandBus.calls.value - key
         if (key in IslandBus.progress.value) IslandBus.progress.value = IslandBus.progress.value - key
         IslandBus.chrono.value[key]?.let { c ->
-            // Пауза таймера/секундомера «Часов» может пересоздать уведомление: не убираем карточку,
+            // Пауза таймера/секундомера/записи может пересоздать уведомление: не убираем карточку,
             // чтобы остров не закрылся и можно было нажать «Продолжить».
-            if (c.pausedMs == null || c.recording) {
+            if (c.pausedMs == null) {
                 IslandBus.chrono.value = IslandBus.chrono.value - key
             }
         }
