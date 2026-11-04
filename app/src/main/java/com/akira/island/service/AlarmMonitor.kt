@@ -22,13 +22,15 @@ import com.akira.island.core.Tints
 import com.akira.island.core.tr
 import com.akira.island.data.SettingsRepo
 import com.akira.island.island.Ios
+import java.util.Calendar
 
 /**
  * Ближайший будильник. Его знает сама система (AlarmManager.getNextAlarmClock) — уведомления «Часов»
  * для этого не нужны. Поставили новый будильник — остров показывает плашку со временем подъёма;
  * следующий по расписанию (прошлый прозвенел или отложен) — молча.
- * Будильником системы пользуются и календари, напоминалки, трекеры сна — их «будильник» человек не ставил,
- * поэтому берём только поставленные приложением-будильником («Часы», Alarmy и т. п.).
+ * Будильником системы пользуются и календари, напоминалки, трекеры сна — их «будильник» человек не ставил.
+ * Если автор известен, берём только приложения-будильники («Часы», Alarmy и т. п.); если Android скрывает
+ * автора, оставляем обычное время, но отсекаем служебную полночь.
  */
 class AlarmMonitor(private val context: Context) {
     private val alarms = context.getSystemService(AlarmManager::class.java)
@@ -61,11 +63,13 @@ class AlarmMonitor(private val context: Context) {
         val now = System.currentTimeMillis()
         val info = runCatching { alarms?.nextAlarmClock }.getOrNull()
         val creator = info?.showIntent?.creatorPackage
-        // Android 14+ иногда скрывает автора будильника, пока до звонка не осталось пары минут. Такой
-        // AlarmClockInfo может быть служебным «будильником» календаря, Find My или прошивки — например,
-        // на 00:00. Без известного приложения-будильника не показываем его вовсе, иначе в острове
-        // появляется будильник, которого человек не ставил.
-        val allowed = creator != null && ClockApps.isAlarmApp(context, creator)
+        // Android 14+ иногда скрывает автора будильника, пока до звонка не осталось пары минут.
+        // Неизвестный автор — ещё не повод прятать настоящий будильник: на Vivo/Android 14 иначе
+        // пропадают все будильники. Служебные AlarmClockInfo без автора обычно стоят ровно на 00:00,
+        // их и отсекаем; известные приложения-будильники принимаем всегда.
+        val known = creator != null && ClockApps.isAlarmApp(context, creator)
+        val allowed = info != null &&
+            (known || (creator == null && !isMidnight(info.triggerTime)))
         val next = info?.takeIf { allowed && it.triggerTime > now }
             ?.let { AlarmInfo(it.triggerTime, creator, it.showIntent) }
         val prev = IslandBus.nextAlarm.value
@@ -85,5 +89,11 @@ class AlarmMonitor(private val context: Context) {
                 extraMs = 2_000,
             ),
         )
+    }
+
+    /** Служебные «будильники» календарей и прошивки часто приходят без автора ровно на полночь. */
+    private fun isMidnight(triggerAt: Long): Boolean {
+        val c = Calendar.getInstance().apply { timeInMillis = triggerAt }
+        return c.get(Calendar.HOUR_OF_DAY) == 0 && c.get(Calendar.MINUTE) == 0
     }
 }

@@ -56,7 +56,8 @@ object ClockApps {
                     @Suppress("DEPRECATION")
                     context.packageManager.queryIntentActivities(Intent(action), 0).map { it.activityInfo.packageName }
                 }.getOrDefault(emptyList())
-            }).also { alarmApps = it }) || pkg.contains("clock", ignoreCase = true)
+            }).also { alarmApps = it }) ||
+            pkg.contains("clock", ignoreCase = true) || pkg.contains("alarm", ignoreCase = true)
 }
 
 /**

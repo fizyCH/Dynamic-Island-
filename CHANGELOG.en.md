@@ -6,6 +6,10 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.36] — 2026-11-04
+
+- ⏰ **Alarms show up again**: on Android 14+/Vivo the system often hides the alarm’s author — such alarms are no longer discarded. Service entries without an author exactly at 00:00 are still hidden.
+
 ## [1.6.35] — 2026-11-04
 
 - 🟢 **The privacy dot no longer covers activities**: when it appears, the compact island widens slightly, moving content away from the camera. The width returns when the dot is gone.
