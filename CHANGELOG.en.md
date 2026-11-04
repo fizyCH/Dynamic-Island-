@@ -6,6 +6,12 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.34] — 2026-11-04
+
+- ⏰ **False 00:00 alarm**: the island no longer shows service `AlarmClockInfo` entries from calendars and system apps. Alarms are only shown when they come from a known alarm-clock app.
+- 🚩 **Stopwatch flag**: the button now presses the **“Count”** action in the stopwatch notification instead of opening Clock and looking for a button on screen.
+- 🟢 **Face scanner**: the green privacy dot no longer appears during face unlock — the camera is being used by the system scanner on the lock screen.
+
 ## [1.6.33] — 2026-11-03
 
 - 🟢 The privacy indicator is now **vertically centered** on the camera/capsule; its right-of-camera horizontal position is unchanged.

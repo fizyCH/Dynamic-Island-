@@ -58,17 +58,19 @@ class AlarmMonitor(private val context: Context) {
     }
 
     private fun refresh(announce: Boolean) {
+        val now = System.currentTimeMillis()
         val info = runCatching { alarms?.nextAlarmClock }.getOrNull()
         val creator = info?.showIntent?.creatorPackage
-        // На Android 14+ showIntent иногда null; не отбрасываем такой будильник.
-        val allowed = info != null && (creator == null || ClockApps.isAlarmApp(context, creator))
-        val next = info?.takeIf { allowed }
-            ?.let { AlarmInfo(it.triggerTime, it.showIntent?.creatorPackage, it.showIntent) }
+        // Android 14+ иногда скрывает автора будильника, пока до звонка не осталось пары минут. Такой
+        // AlarmClockInfo может быть служебным «будильником» календаря, Find My или прошивки — например,
+        // на 00:00. Без известного приложения-будильника не показываем его вовсе, иначе в острове
+        // появляется будильник, которого человек не ставил.
+        val allowed = creator != null && ClockApps.isAlarmApp(context, creator)
+        val next = info?.takeIf { allowed && it.triggerTime > now }
+            ?.let { AlarmInfo(it.triggerTime, creator, it.showIntent) }
         val prev = IslandBus.nextAlarm.value
         IslandBus.nextAlarm.value = next
         if (!announce || next == null || prev?.triggerAt == next.triggerAt) return
-        val now = System.currentTimeMillis()
-        if (next.triggerAt <= now) return
         // Прошлый будильник уже прозвенел или его отложили — это не новый, а очередной по расписанию
         if (prev != null && prev.triggerAt <= now + 60_000) return
         val s = SettingsRepo.current

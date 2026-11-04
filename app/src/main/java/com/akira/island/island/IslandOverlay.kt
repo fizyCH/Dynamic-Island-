@@ -142,6 +142,7 @@ fun IslandOverlay(
     val powerSave by IslandBus.powerSave.collectAsState()
     val privacyCamera by IslandBus.privacyCamera.collectAsState()
     val privacyMic by IslandBus.privacyMic.collectAsState()
+    val keyguard by IslandBus.keyguard.collectAsState()
     // В энергосбережении Android с «Экономией заряда» остров обходится без живых эффектов
     val s = remember(saved, powerSave) { saved.forPowerSave(powerSave) }
     val media by IslandBus.media.collectAsState()
@@ -368,9 +369,10 @@ fun IslandOverlay(
         ) {
             IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, onBody, onBubble)
         }
-        // Индикатор приватности справа от камеры: камера — зелёный, микрофон — оранжевый
+        // Индикатор приватности справа от камеры: камера — зелёный, микрофон — оранжевый.
+        // На экране блокировки камеру занимает сканер лица — его зелёной точкой не помечаем.
         val privacyColor = when {
-            privacyCamera -> Tints.Green
+            privacyCamera && !keyguard -> Tints.Green
             privacyMic -> Tints.Orange
             else -> null
         }

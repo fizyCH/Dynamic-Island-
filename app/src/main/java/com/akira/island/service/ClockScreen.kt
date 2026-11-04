@@ -130,7 +130,8 @@ object ClockWords {
     private val start = listOf("старт", "start", "начать", "пуск", "запуст", "продолж", "возобнов", "resume")
     private val pause = setOf("пауза", "pause", "стоп", "stop")
     private val reset = listOf("сброс", "reset", "удал", "delete", "отмен", "cancel", "очист", "clear")
-    private val lap = listOf("флаж", "круг", "отмет", "lap", "flag", "split", "mark")
+    private val lap = listOf("флаж", "круг", "отмет", "количеств", "lap", "flag", "split", "mark")
+    private val lapExact = setOf("count", "counts", "number")
     private val nonLetters = Regex("[^\\p{L}]+")
 
     /** Кнопки на экране «Часов», которые остров ищет и нажимает сам, — подпись целиком. */
@@ -145,7 +146,7 @@ object ClockWords {
     fun action(label: CharSequence?): ClockAction? {
         val words = label?.toString()?.lowercase()?.split(nonLetters)?.filter { it.isNotEmpty() } ?: return null
         return when {
-            words.any { w -> lap.any { it in w } } -> ClockAction.LAP
+            words.any { w -> lap.any { it in w } || w in lapExact } -> ClockAction.LAP
             words.any { w -> reset.any { w.startsWith(it) } } -> ClockAction.RESET
             words.any { w -> w in pause || w.startsWith("приостанов") } -> ClockAction.PAUSE
             words.any { w -> start.any { w.startsWith(it) } } -> ClockAction.START
@@ -848,7 +849,9 @@ object ClockControl {
             ClockAction.PAUSE -> c.copy(pausedMs = value)
             ClockAction.START -> c.copy(pausedMs = null, base = if (c.countDown) now + value else now - value)
             ClockAction.RESET -> null
-            ClockAction.LAP -> c
+            // «Количество» в уведомлении «Часов» ставит новый круг — сразу показываем счётчик,
+            // не дожидаясь, пока «Часы» перерисуют уведомление.
+            ClockAction.LAP -> c.copy(flags = c.flags + 1)
         }
         IslandBus.chrono.value = if (next == null) IslandBus.chrono.value - c.key else IslandBus.chrono.value + (c.key to next)
     }
