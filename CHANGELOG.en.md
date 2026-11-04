@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.35] — 2026-11-04
+
+- 🟢 **The privacy dot no longer covers activities**: when it appears, the compact island widens slightly, moving content away from the camera. The width returns when the dot is gone.
+- 🚩 **Stopwatch laps no longer reset**: the island reads “Count: N” from the notification (including RemoteViews) and keeps the counter between updates.
+- 🔋 **Low battery three times**: warnings at 5%, 10% and a configurable upper threshold of 20–50% (20% by default).
+- 🧪 The Try it screen now has demos for low battery, power saving, the privacy dot and stopwatch laps.
+
 ## [1.6.34] — 2026-11-04
 
 - ⏰ **False 00:00 alarm**: the island no longer shows service `AlarmClockInfo` entries from calendars and system apps. Alarms are only shown when they come from a known alarm-clock app.

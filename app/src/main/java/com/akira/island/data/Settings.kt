@@ -131,7 +131,7 @@ data class IslandSettings(
     val evChargeStart: Boolean = true,
     val evChargeStop: Boolean = true,
     val evLowBattery: Boolean = true,
-    /** При каком уровне заряда показывать «Низкий заряд» */
+    /** Верхний порог «Низкого заряда» (20–50%); пороги 5% и 10% всегда включены */
     val batteryThreshold: Int = 20,
     val evPowerSave: Boolean = true,
     val evWifiOn: Boolean = true,

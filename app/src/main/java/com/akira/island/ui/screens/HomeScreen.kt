@@ -30,8 +30,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.HourglassBottom
@@ -392,6 +395,51 @@ private fun DemoTile(d: Demo, modifier: Modifier, onClick: () -> Unit) {
 private fun demos(context: Context): List<Demo> = listOf(
     Demo(Icons.Rounded.Bolt, tr("Событие", "Event"), tr("Зарядка 75% во всю ширину", "Charging 75% at full width"), Tile.Green) {
         IslandBus.post(Notice(tr("Зарядка", "Charging"), "75%", Ios.load(context, R.drawable.ios_flash), Tints.Green, battery = 75))
+    },
+    Demo(Icons.Rounded.BatteryAlert, tr("Низкий заряд", "Low battery"),
+        tr("Плашка на 5%, 10% и ${SettingsRepo.current.batteryThreshold.coerceIn(20, 50)}%",
+            "A notice at 5%, 10% and ${SettingsRepo.current.batteryThreshold.coerceIn(20, 50)}%"), Tile.Red) {
+        val level = SettingsRepo.current.batteryThreshold.coerceIn(20, 50)
+        IslandBus.post(Notice(tr("Низкий заряд", "Low Battery"), "$level%", Ios.load(context, R.drawable.ios_battery_dead), Tints.Red, battery = level))
+    },
+    Demo(Icons.Rounded.BatterySaver, tr("Энергосбережение", "Power saving"),
+        tr("Оранжевая плашка включения", "The orange power-saving notice"), Tile.Orange) {
+        IslandBus.post(Notice(tr("Энергосбережение", "Power saving"), tr("Вкл", "On"),
+            Ios.load(context, R.drawable.ios_battery_full), Tints.Orange))
+    },
+    Demo(Icons.Rounded.Mic, tr("Приватность", "Privacy"),
+        tr("Зелёная точка камеры, затем оранжевая микрофона", "A green camera dot, then an orange microphone dot"), Tile.Green) {
+        IslandBus.privacyCamera.value = true
+        IslandBus.scope.launch {
+            delay(2_500)
+            IslandBus.privacyCamera.value = false
+            IslandBus.privacyMic.value = true
+            delay(2_500)
+            IslandBus.privacyMic.value = false
+        }
+    },
+    Demo(Icons.Rounded.Flag, tr("Флажки", "Laps"),
+        tr("Секундомер с тремя отметками; флажок добавляет ещё", "A stopwatch with three marks; the flag adds one more"), Tile.Orange) {
+        val key = "demo-laps"
+        val now = System.currentTimeMillis()
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+        val test = PendingIntent.getBroadcast(context, 1, Intent("com.akira.island.TEST").setPackage(context.packageName), flags)
+        IslandBus.chrono.value = IslandBus.chrono.value + (key to ChronoInfo(
+            key = key,
+            pkg = context.packageName,
+            title = tr("Секундомер · Остров", "Stopwatch · Island"),
+            icon = NotificationParser.icon(context, context.packageName),
+            base = now,
+            countDown = false,
+            postTime = now,
+            flags = 3,
+            lap = test,
+        ))
+        IslandBus.scope.launch {
+            delay(6_000)
+            IslandBus.chrono.value = IslandBus.chrono.value - key
+        }
     },
     Demo(Icons.Rounded.NotificationsOff, tr("Режим звука", "Ring mode"),
         tr("Капсула вздрагивает, колокольчик качается", "The capsule shakes, the bell swings"), Tile.Red) {

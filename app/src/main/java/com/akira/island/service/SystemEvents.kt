@@ -49,7 +49,8 @@ class SystemEvents(private val context: Context) {
     private val keyguard = context.getSystemService(KeyguardManager::class.java)
     private val s get() = SettingsRepo.current
 
-    private var lowWarned = false
+    /** Пороги низкого заряда, о которых уже предупредили: 5, 10 и настраиваемый верхний. */
+    private val lowWarned = HashSet<Int>()
     private var usbConnected: Boolean? = null
     private var brightnessMode = -1
     private var dnd: Boolean? = null
@@ -340,12 +341,20 @@ class SystemEvents(private val context: Context) {
             (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
         IslandBus.battery.value = BatteryInfo(level, charging)
 
-        val threshold = s.batteryThreshold.coerceIn(5, 50)
-        if (charging || level > threshold) {
-            lowWarned = false
-        } else if (level >= 0 && !lowWarned) {
-            lowWarned = true
-            notice(s.evLowBattery, Notice(tr("Низкий заряд", "Low Battery"), "$level%", ic(R.drawable.ios_battery_dead), Tints.Red, battery = level))
+        // По умолчанию три предупреждения: 20% (настраивается 20–50%), затем 10% и 5%.
+        val high = s.batteryThreshold.coerceIn(20, 50)
+        if (charging || level > high) {
+            lowWarned.clear()
+        } else if (level >= 0) {
+            for (threshold in intArrayOf(5, 10, high)) {
+                if (level <= threshold && threshold !in lowWarned && s.evLowBattery) {
+                    lowWarned += threshold
+                    notice(
+                        true,
+                        Notice(tr("Низкий заряд", "Low Battery"), "$level%", ic(R.drawable.ios_battery_dead), Tints.Red, battery = level),
+                    )
+                }
+            }
         }
     }
 

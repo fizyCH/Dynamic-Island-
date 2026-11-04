@@ -123,6 +123,8 @@ object NotificationParser {
         // Кнопки «Часов» (пауза, продолжить, сброс) — их нажимают кнопки острова
         val clock = ClockApps.isClock(context, sbn.packageName) || clockHint
         val buttons = if (clock) ClockWords.buttons(n.actions) else emptyMap()
+        // В некоторых «Часах» число кругов лежит только в кастомном RemoteViews — «Количество: 3».
+        val clockText = if (clock) notificationText(context, n) else null
         // Запись экрана или голоса без chronometer-extra: считаем время от начала уведомления.
         // Статус «липкий»: если запись уже опознали, её обновления не должны её выключать.
         val nowElapsed = SystemClock.elapsedRealtime()
@@ -164,6 +166,19 @@ object NotificationParser {
             (recentChannel && ongoing) || smartShotRecording
         val recording = recordingCandidate && !recFinishedText &&
             (ongoing || recPausedText) && (!vivoSmartShot || smartShotRecording)
+        val clockLapCount = if (clock && !recording) {
+            listOfNotNull(
+                title,
+                n.tickerText?.toString(),
+                ex.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+                ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+                ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+                clockText,
+                n.actions?.joinToString(" ") { it.title?.toString().orEmpty() },
+            ).joinToString(" ").let { ClockScreenParser.lapCount(it) }
+        } else {
+            null
+        }
         // Некоторые прошивки (OriginOS и др.) не дают время в extras: Chronometer живёт в RemoteViews.
         val uiChrono = smartShotChrono ?: if (recording || clock) notificationChronometer(context, n) else null
         if (recording) {
@@ -282,7 +297,12 @@ object NotificationParser {
                     pausedMs = pausedMs ?: recPausedMs, pause = if (recording) recPause else buttons[ClockAction.PAUSE],
                     resume = if (recording) recResume else buttons[ClockAction.START],
                     reset = buttons[ClockAction.RESET], recording = recording, chronometer = ticking,
-                    notificationWhen = n.`when`, lap = buttons[ClockAction.LAP]))
+                    notificationWhen = n.`when`, lap = buttons[ClockAction.LAP],
+                    flags = if (!down && !recording) {
+                        clockLapCount ?: previousChrono?.takeIf { !it.countDown && !it.recording }?.flags ?: 0
+                    } else {
+                        0
+                    }))
             } else {
                 remove(sbn.key)
             }
@@ -348,10 +368,12 @@ object NotificationParser {
 
     /** Весь видимый текст RemoteViews — Vivo пишет в него «Пауза»/«Запись». */
     private fun notificationText(context: Context, n: Notification): String? {
-        val remote = listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView).firstOrNull() ?: return null
-        val root = runCatching { remote.apply(context, FrameLayout(context)) }.getOrNull() ?: return null
+        // Число кругов и подпись «Количество» могут быть в bigContentView, а не в contentView.
         val out = StringBuilder()
-        collectText(root, out)
+        listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView).forEach { remote ->
+            val root = runCatching { remote.apply(context, FrameLayout(context)) }.getOrNull() ?: return@forEach
+            collectText(root, out)
+        }
         return out.toString().lowercase().takeIf { it.isNotBlank() }
     }
 

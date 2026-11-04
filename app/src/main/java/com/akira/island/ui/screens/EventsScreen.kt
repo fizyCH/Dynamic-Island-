@@ -29,7 +29,7 @@ import com.akira.island.core.tr
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
 import com.akira.island.ui.Group
-import com.akira.island.ui.GroupSlider
+import com.akira.island.ui.GroupStepSlider
 import com.akira.island.ui.GroupToggle
 import com.akira.island.ui.Page
 import com.akira.island.ui.Pos
@@ -43,6 +43,7 @@ fun EventsScreen(onBack: () -> Unit) {
     fun set(block: IslandSettings.() -> IslandSettings) = SettingsRepo.update(block)
 
     Page(tr("События", "Events"), onBack) {
+        val lowHigh = s.batteryThreshold.coerceIn(20, 50)
         SectionHeader(tr("Батарея", "Battery"))
         Group {
             GroupToggle(Pos.First, Icons.Rounded.Bolt, tr("Зарядка началась", "Charging started"), null,
@@ -50,14 +51,13 @@ fun EventsScreen(onBack: () -> Unit) {
             GroupToggle(Pos.Middle, Icons.Rounded.PowerOff, tr("Зарядка остановлена", "Charging stopped"), null,
                 s.evChargeStop, color = Tile.Gray) { set { copy(evChargeStop = it) } }
             GroupToggle(if (s.evLowBattery) Pos.Middle else Pos.Last, Icons.Rounded.BatteryAlert, tr("Низкий заряд", "Low battery"),
-                tr("Когда заряд падает до ${s.batteryThreshold}%", "When the battery drops to ${s.batteryThreshold}%"),
+                tr("На 5%, 10% и $lowHigh%", "At 5%, 10% and $lowHigh%"),
                 s.evLowBattery, color = Tile.Red) { set { copy(evLowBattery = it) } }
             if (s.evLowBattery) {
-                GroupSlider(
-                    Pos.Last, Icons.Rounded.BatteryAlert, tr("Порог низкого заряда", "Low battery threshold"),
-                    value = s.batteryThreshold.toFloat(), range = 5f..50f, steps = 8,
-                    label = "${s.batteryThreshold}%", color = Tile.Red,
-                ) { v -> set { copy(batteryThreshold = v.toInt()) } }
+                GroupStepSlider(
+                    Pos.Last, Icons.Rounded.BatteryAlert, tr("Верхний порог", "Upper threshold"),
+                    value = lowHigh, range = 20..50, unit = "%", color = Tile.Red,
+                ) { v -> set { copy(batteryThreshold = v) } }
             }
         }
 

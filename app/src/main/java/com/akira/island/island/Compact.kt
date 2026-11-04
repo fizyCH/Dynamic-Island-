@@ -112,6 +112,7 @@ import com.akira.island.core.tr
 import com.akira.island.ui.Inter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Цифры одной ширины, чтобы время не «прыгало» */
 val Digits = TextStyle(fontFamily = Inter, fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold)
@@ -135,7 +136,14 @@ fun callHeight(s: IslandSettings): Dp = (s.height.dp * 2.27f).coerceAtLeast(76.d
 fun cameraInset(s: IslandSettings): Dp = s.height.dp * 0.5f + 11.5.dp
 
 @Composable
-fun CompactContent(act: Act, s: IslandSettings, wideWidth: Dp) {
+fun CompactContent(act: Act, settings: IslandSettings, wideWidth: Dp, gapExtra: Dp = 0.dp) {
+    // Точка приватности занимает место справа от камеры: раздвигаем только компактное содержимое,
+    // чтобы она не ложилась на текст. Раскрытые карточки и так начинаются ниже выреза.
+    val s = if (gapExtra > 0.dp) {
+        settings.copy(cameraGap = (settings.cameraGap + gapExtra.value).roundToInt())
+    } else {
+        settings
+    }
     val h = activeHeight(s)
     val gap = compactGap(s)
     val side = sideMax(s)

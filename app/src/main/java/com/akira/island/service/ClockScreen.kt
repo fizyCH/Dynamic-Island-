@@ -185,6 +185,15 @@ object ClockScreenParser {
         val frac = m.groupValues[4].takeIf { it.isNotEmpty() }?.padEnd(3, '0')?.toLong() ?: 0L
         return ((h * 60 + min) * 60 + sec) * 1000 + frac
     }
+
+    /** «Количество: 3», «Lap 3», «Кругов: 12» — число кругов из уведомления или с экрана. */
+    private val lapCount = Regex(
+        """(?i)(?:количество|кол-?во|count|laps?|круг\p{L}*|флаж\p{L}*|отмет\p{L}*|split)""" +
+            """\s*(?:кругов|круга|круги|of)?\s*[:：\-–—]?\s*(\d+)""",
+    )
+
+    fun lapCount(text: CharSequence?): Int? =
+        text?.let { lapCount.find(it)?.groupValues?.get(1)?.toIntOrNull() }
 }
 
 /**
@@ -692,8 +701,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         val text = (node.text ?: node.contentDescription)?.toString()?.trim().orEmpty()
         var keep = false
         if (text.isNotEmpty() && node.isVisibleToUser) {
-            Regex("""(?i)(?:круг|lap|флаж|отмет|split)\s*(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
-                ?.let { lapCount = maxOf(lapCount, it) }
+            ClockScreenParser.lapCount(text)?.let { lapCount = maxOf(lapCount, it) }
             if (ClockScreenParser.parse(text) != null) {
                 val b = Rect()
                 node.getBoundsInScreen(b)

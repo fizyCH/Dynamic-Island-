@@ -353,6 +353,14 @@ fun IslandOverlay(
     }
     val onBubble = remember(onBubbleBounds) { { r: Rect -> onBubbleBounds(if (hiddenNow.value) Rect.Zero else r) } }
     val eggOn = egg && !calibrating
+    // Индикатор приватности справа от камеры: камера — зелёный, микрофон — оранжевый.
+    // На экране блокировки камеру занимает сканер лица — его зелёной точкой не помечаем.
+    val privacyColor = when {
+        privacyCamera && !keyguard -> Tints.Green
+        privacyMic -> Tints.Orange
+        else -> null
+    }
+    val privacyOn = privacyColor != null
 
     // Остров меряется по своему размеру, а не по окну, и стоит сверху по центру окна
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -367,14 +375,7 @@ fun IslandOverlay(
             enter = if (s.reduceEffects) fadeIn() else scaleIn(islandSpec(s), initialScale = 0.3f, transformOrigin = top) + fadeIn(tween(120)),
             exit = if (s.reduceEffects) fadeOut() else scaleOut(islandSpec(s), targetScale = 0.3f, transformOrigin = top) + fadeOut(tween(160)),
         ) {
-            IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, onBody, onBubble)
-        }
-        // Индикатор приватности справа от камеры: камера — зелёный, микрофон — оранжевый.
-        // На экране блокировки камеру занимает сканер лица — его зелёной точкой не помечаем.
-        val privacyColor = when {
-            privacyCamera && !keyguard -> Tints.Green
-            privacyMic -> Tints.Orange
-            else -> null
+            IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, privacyOn, onBody, onBubble)
         }
         if (privacyColor != null && !calibrating) {
             Box(
@@ -407,6 +408,7 @@ private fun IslandRow(
     bubbleVisible: Boolean,
     bubbleAct: Act?,
     calibrating: Boolean,
+    privacyOn: Boolean,
     onBodyBounds: (Rect) -> Unit,
     onBubbleBounds: (Rect) -> Unit,
 ) {
@@ -427,7 +429,7 @@ private fun IslandRow(
     ) {
         // Пустое место слева уравновешивает пузырь, чтобы остров стоял над камерой
         Spacer(Modifier.animatedWidth(slot))
-        IslandBody(primary, showExpanded, s, lyrics, battery, calibrating, onBodyBounds)
+        IslandBody(primary, showExpanded, s, lyrics, battery, calibrating, privacyOn, onBodyBounds)
         BubbleSlot(slot, bubbleVisible, bubbleAct, s, onBubbleBounds)
     }
 }
@@ -475,6 +477,7 @@ private fun IslandBody(
     lyrics: Lyrics?,
     battery: BatteryInfo,
     calibrating: Boolean,
+    privacyOn: Boolean,
     onBounds: (Rect) -> Unit,
 ) {
     val context = LocalContext.current
@@ -502,6 +505,9 @@ private fun IslandBody(
     }
     // Скругление читается при рисовании: кадр раскрытия перерисовывает рамку и стекло, а не пересобирает остров
     val corner = animateDpAsState(cornerTarget, islandSpec(s), label = "corner")
+    // Точка приватности стоит чуть правее выреза. Раздвигаем содержимое вокруг камеры на её ширину,
+    // чтобы правый текст не оказался под точкой; капсула от этого немного расширяется.
+    val privacyGap = animateDpAsState(if (privacyOn) 30.dp else 0.dp, islandSpec(s), label = "privacyGap")
     val shape = remember(corner, s.notch) { AnimatedIslandShape(corner, s.notch) }
     val accent = (primary as? Act.MediaA)?.m?.accent
     val outlineColor = if (s.outlineFromArt && accent != null) accent else Color(s.outlineColor)
@@ -723,7 +729,7 @@ private fun IslandBody(
                 if (f.expanded) {
                     ExpandedContent(f.act, s, lyrics, battery, expandedWidth)
                 } else {
-                    CompactContent(f.act, s, expandedWidth)
+                    CompactContent(f.act, s, expandedWidth, privacyGap.value)
                 }
             }
         }
