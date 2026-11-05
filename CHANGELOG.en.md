@@ -6,6 +6,11 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.37] — 2026-11-05
+
+- 💧 **The privacy dot is now a drop**: it appears to the right of the camera with a soft animation and hides when the island is expanded.
+- 📳 **Vibration**: added a quick “Vibration” switch on the home screen; it is also in Features → Behavior → Haptics. Turn it off and the island won’t vibrate on taps or swipes.
+
 ## [1.6.36] — 2026-11-04
 
 - ⏰ **Alarms show up again**: on Android 14+/Vivo the system often hides the alarm’s author — such alarms are no longer discarded. Service entries without an author exactly at 00:00 are still hidden.

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -100,6 +101,7 @@ import com.akira.island.service.SystemBanners
 import com.akira.island.update.UpdateChecker
 import com.akira.island.ui.Group
 import com.akira.island.ui.GroupItem
+import com.akira.island.ui.GroupToggle
 import com.akira.island.ui.ItemIcon
 import com.akira.island.ui.Page
 import com.akira.island.ui.Perms
@@ -203,6 +205,10 @@ fun HomeScreen(open: (Screen) -> Unit) {
             KeepAliveItem(Pos.Middle, open)
             // И про банки, которые не пускают, пока остров включён
             BanksItem(Pos.Middle, open)
+            // Быстрый доступ к отключению вибрации: настройка есть и в «Функции → Поведение»
+            GroupToggle(Pos.Middle, Icons.Rounded.Vibration, tr("Вибрация", "Vibration"),
+                tr("Отклик при нажатии и свайпах по острову", "Feedback when tapping and swiping the island"),
+                s.haptics, color = Tile.Pink) { v -> SettingsRepo.update { copy(haptics = v) } }
             GroupItem(
                 Pos.Last, Icons.Rounded.Science, tr("Проверка", "Try it"),
                 tr("Событие, сообщение, звонок, оплата — прямо в острове", "An event, message, call, payment — right in the island"),
