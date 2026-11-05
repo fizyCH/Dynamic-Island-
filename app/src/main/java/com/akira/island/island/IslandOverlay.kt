@@ -58,8 +58,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -382,27 +380,26 @@ fun IslandOverlay(
         ) {
             IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, privacyOn, onBody, onBubble)
         }
-        // Капля «вытекает» из острова справа от камеры: камера — зелёная, микрофон — оранжевая.
+        // Точка появляется «каплей» из острова справа от камеры: камера — зелёная, микрофон — оранжевая.
         // При раскрытии острова она прячется, чтобы не мешать содержимому.
         AnimatedVisibility(
             visible = privacyOn && !calibrating,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .offset(
-                    x = (s.cameraGap.dp / 2 + 7.5.dp),
-                    y = (ISLAND_PAD_DP.dp + s.height.dp / 2 - 5.dp),
+                    x = (s.cameraGap.dp / 2 + 9.dp),
+                    y = (ISLAND_PAD_DP.dp + s.height.dp / 2 - 3.5f.dp),
                 ),
             enter = if (s.reduceEffects) fadeIn() else
                 scaleIn(islandSpec(s), initialScale = 0.15f, transformOrigin = TransformOrigin(0f, 0.5f)) + fadeIn(tween(120)),
             exit = if (s.reduceEffects) fadeOut() else
                 scaleOut(islandSpec(s), targetScale = 0.15f, transformOrigin = TransformOrigin(0f, 0.5f)) + fadeOut(tween(100)),
         ) {
-            Icon(
-                Icons.Rounded.WaterDrop, null,
-                tint = privacyTint,
-                modifier = Modifier
-                    .size(10.dp)
-                    .graphicsLayer { rotationZ = -90f },
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(privacyTint),
             )
         }
         if (eggOn) {

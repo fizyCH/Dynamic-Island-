@@ -6,6 +6,10 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.6.38] — 2026-11-05
+
+- 💧 **The privacy dot is round again**, but appears and disappears with a drop effect. It still hides when the island is expanded.
+
 ## [1.6.37] — 2026-11-05
 
 - 💧 **The privacy dot is now a drop**: it appears to the right of the camera with a soft animation and hides when the island is expanded.
