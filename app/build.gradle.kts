@@ -13,8 +13,8 @@ android {
         applicationId = "com.akira.island"
         minSdk = 26
         targetSdk = 35
-        versionCode = 45
-        versionName = "1.6.38"
+        versionCode = 46
+        versionName = "1.6.39"
     }
 
     // Ключ подписи в репозитории не хранится: релизный APK собирается без подписи,

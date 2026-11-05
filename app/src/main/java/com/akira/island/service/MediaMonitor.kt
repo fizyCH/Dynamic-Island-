@@ -114,7 +114,9 @@ class MediaMonitor(private val context: Context) {
 
     private fun bind(list: List<MediaController>) {
         unbindAll()
-        list.forEach { c ->
+        // YouTube (включая ReVanced/Vanced) — видеоплеер, а не музыкальный: его карточка в острове не нужна.
+        // YouTube Music при этом остаётся: у него «music» в имени пакета.
+        list.filterNot { isYouTube(it.packageName) }.forEach { c ->
             val cb = object : MediaController.Callback() {
                 override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
                 override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
@@ -134,6 +136,11 @@ class MediaMonitor(private val context: Context) {
     private fun isPlaying(c: MediaController): Boolean {
         val st = c.playbackState?.state
         return st == PlaybackState.STATE_PLAYING || st == PlaybackState.STATE_BUFFERING
+    }
+
+    private fun isYouTube(pkg: String): Boolean {
+        val p = pkg.lowercase()
+        return "youtube" in p && "music" !in p
     }
 
     private fun refresh() {
