@@ -10,9 +10,9 @@
 
 Уведомления с ответом · навигатор · оплата · музыка с текстом песен · звонки · таймеры · загрузки · зарядка · фонарик · системные события
 
-[![Версия 1.7.2](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.7.2-C6C3F7?style=for-the-badge&labelColor=1C1B22)](https://github.com/Arusaky/Dynamic-Island-/releases/latest)
-[![Загрузки](https://img.shields.io/github/downloads/Akira9021/Dynamic-Island-/total?style=for-the-badge&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=34C759&labelColor=1C1B22)](https://github.com/Akira9021/Dynamic-Island-/releases)
-[![Сборка](https://img.shields.io/github/actions/workflow/status/Akira9021/Dynamic-Island-/android.yml?style=for-the-badge&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1C1B22)](https://github.com/Akira9021/Dynamic-Island-/actions)
+[![Версия 1.7.3](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.7.3-C6C3F7?style=for-the-badge&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/releases/latest)
+[![Загрузки](https://img.shields.io/github/downloads/fizyCH/Dynamic-Island-/total?style=for-the-badge&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=34C759&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/releases)
+[![Сборка](https://img.shields.io/github/actions/workflow/status/fizyCH/Dynamic-Island-/android.yml?style=for-the-badge&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/actions)
 <br>
 ![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
@@ -21,7 +21,7 @@
 
 <img src="docs/preview-1.7.0.png" width="820" alt="Dynamic Island 1.7.0: иллюстрации быстрого доступа, часов, погоды и цвета текста">
 
-### [⬇️ Скачать последнюю версию](https://github.com/Akira9021/Dynamic-Island-/releases/latest)
+### [⬇️ Скачать последнюю версию](https://github.com/fizyCH/Dynamic-Island-/releases/latest)
 
 [Что нового](#-что-нового-в-170) · [Возможности](#-возможности) · [Установка](#-установка) · [Жесты](#-жесты) · [Настройки](#-настройки) · [Как устроено](#-как-устроено)
 
@@ -90,7 +90,7 @@
 
 ## 📥 Установка
 
-1. Скачайте **`DynamicIsland.apk`** со страницы [последнего релиза](https://github.com/Akira9021/Dynamic-Island-/releases/latest) и установите.
+1. Скачайте **`DynamicIsland.apk`** со страницы [последнего релиза](https://github.com/fizyCH/Dynamic-Island-/releases/latest) и установите.
 2. Откройте приложение — на «Главной» нажмите **«Открыть спец. возможности»** и включите «Динамический остров».
    > На Android 13+ появится «Ограниченная настройка»: закройте окно, откройте **О приложении → ⋮ → Разрешить ограниченные настройки** и повторите шаг 2. Пункт в меню «⋮» появляется только после первой попытки.
 3. «Главная» → **Разрешения**: включите **Доступ к уведомлениям** — без него не будет музыки, загрузок и таймеров Часов.
@@ -114,7 +114,7 @@
 Новые версии ставятся поверх старых, настройки сохраняются (с 1.6.0 и старше — один раз переустановить, см. выше).
 
 > [!TIP]
-> Обновлять можно прямо в острове, а можно через [Obtainium](https://github.com/ImranR98/Obtainium): добавьте ссылку `https://github.com/Akira9021/Dynamic-Island-` — APK в релизах всегда называется `DynamicIsland.apk`.
+> Обновлять можно прямо в острове, а можно через [Obtainium](https://github.com/ImranR98/Obtainium): добавьте ссылку `https://github.com/fizyCH/Dynamic-Island-` — APK в релизах всегда называется `DynamicIsland.apk`.
 
 ## 👆 Жесты
 
@@ -161,7 +161,7 @@ Kotlin, Jetpack Compose, Material 3. Нужны JDK 17 и Android SDK 35.
 ./gradlew assembleRelease   # app-release-unsigned.apk — релизную подпись ставит CI
 ```
 
-Каждый push собирает APK в [GitHub Actions](https://github.com/Akira9021/Dynamic-Island-/actions). Чтобы выпустить новую версию, повысьте `versionName` и `versionCode` в `app/build.gradle.kts` и значок версии в начале обоих README и добавьте раздел `## [x.y.z]` в [CHANGELOG.md](CHANGELOG.md) и [CHANGELOG.en.md](CHANGELOG.en.md) — после push в основную ветку релиз с APK и описанием на двух языках создастся сам. Тег `v*` тоже работает.
+Каждый push собирает APK в [GitHub Actions](https://github.com/fizyCH/Dynamic-Island-/actions). Чтобы выпустить новую версию, повысьте `versionName` и `versionCode` в `app/build.gradle.kts` и значок версии в начале обоих README и добавьте раздел `## [x.y.z]` в [CHANGELOG.md](CHANGELOG.md) и [CHANGELOG.en.md](CHANGELOG.en.md) — после push в основную ветку релиз с APK и описанием на двух языках создастся сам. Тег `v*` тоже работает.
 
 | Файл | За что отвечает |
 | --- | --- |
