@@ -10,7 +10,7 @@
 
 Notifications with reply · navigation · payments · music with lyrics · calls · timers · downloads · charging · flashlight · system events
 
-[![Version 1.7.5](https://img.shields.io/badge/version-1.7.5-C6C3F7?style=for-the-badge&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/releases/latest)
+[![Version 1.7.6](https://img.shields.io/badge/version-1.7.6-C6C3F7?style=for-the-badge&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/fizyCH/Dynamic-Island-/total?style=for-the-badge&label=downloads&color=34C759&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/fizyCH/Dynamic-Island-/android.yml?style=for-the-badge&label=build&labelColor=1C1B22)](https://github.com/fizyCH/Dynamic-Island-/actions)
 <br>
