@@ -120,8 +120,10 @@ import com.akira.island.data.MessageStyle
 import com.akira.island.data.ExpandStyle
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.WallpaperTone
 import com.akira.island.data.shouldTimeOutIdle
 import com.akira.island.data.TapAction
+import com.akira.island.service.ScreenTone
 import com.akira.island.service.CallMonitor
 import com.akira.island.service.NavScreen
 import com.akira.island.service.Inbox
@@ -579,6 +581,13 @@ internal fun IslandBody(
     val preview = LocalIslandPreview.current
     val context = LocalContext.current
     val haptic = rememberHaptic()
+    val darkWallpaper by WallpaperTone.dark.collectAsState()
+    val darkScreen by ScreenTone.dark.collectAsState()
+    val autoOutline = !preview && when {
+        s.autoOutlineOnScreen -> darkScreen
+        s.autoOutlineOnDark -> darkWallpaper
+        else -> false
+    }
     val activities by rememberUpdatedState(LocalActivities.current)
     val scope = rememberCoroutineScope()
     val conf = LocalConfiguration.current
@@ -720,7 +729,8 @@ internal fun IslandBody(
             .then(if (glowAlpha > 0f) Modifier.drawBehind { islandGlow(glowTint, glowAlpha, corner.value.toPx(), s.notch) } else Modifier)
             .then(
                 if (calibrating) Modifier.clip(shape).background(CalibrationRed).border(2.dp, Color.White, shape)
-                else Modifier.islandSurface(s, large, shape, accent, tilt = { previewTilt ?: tilt.value }, sheen = { sheen.value }),
+                else Modifier.islandSurface(s, large, shape, accent, autoOutline = autoOutline,
+                    tilt = { previewTilt ?: tilt.value }, sheen = { sheen.value }),
             )
             .then(
                 if (egg && !calibrating) {
@@ -1073,13 +1083,20 @@ private fun Bubble(act: Act, s: IslandSettings) {
 private fun BubbleContent(act: Act, s: IslandSettings) {
     val h = activeHeight(s)
     val haptic = rememberHaptic()
+    val darkWallpaper by WallpaperTone.dark.collectAsState()
+    val darkScreen by ScreenTone.dark.collectAsState()
+    val autoOutline = when {
+        s.autoOutlineOnScreen -> darkScreen
+        s.autoOutlineOnDark -> darkWallpaper
+        else -> false
+    }
     val tilt = IslandBus.glassTilt.collectAsState()
     val previewTilt = LocalGlassTilt.current
     val now = rememberNow(500, active = act is Act.TimerA)
     Box(
         Modifier
             .size(h)
-            .islandSurface(s, false, CircleShape, act.surfaceAccent(), tilt = { previewTilt ?: tilt.value })
+            .islandSurface(s, false, CircleShape, act.surfaceAccent(), autoOutline = autoOutline, tilt = { previewTilt ?: tilt.value })
             .clickable {
                 haptic()
                 Controls.expand(act.id)

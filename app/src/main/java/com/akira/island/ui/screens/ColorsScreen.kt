@@ -132,6 +132,25 @@ fun ColorsScreen(onBack: () -> Unit) {
             }
         }
 
+        SectionHeader(tr("Автоматическая рамка", "Automatic border"))
+        Group {
+            GroupToggle(Pos.First, Icons.Rounded.Screenshot, tr("По цвету на экране", "By screen color"),
+                tr("Считывает фон вокруг острова: тёмный — серая рамка, светлый — без рамки",
+                    "Samples the background around the island: dark adds a gray line, light leaves it off"),
+                s.autoOutlineOnScreen, color = Tile.Teal) { v ->
+                SettingsRepo.update { copy(autoOutlineOnScreen = v, autoOutlineOnDark = if (v) false else autoOutlineOnDark) }
+            }
+            GroupToggle(Pos.Last, Icons.Rounded.DarkMode, tr("По тёмным обоям", "By dark wallpaper"),
+                tr("Резервный вариант, если чтение цвета экрана выключено",
+                    "Fallback when screen color sampling is off"),
+                s.autoOutlineOnDark, color = Tile.Gray) { v ->
+                SettingsRepo.update { copy(autoOutlineOnDark = v, autoOutlineOnScreen = if (v) false else autoOutlineOnScreen) }
+            }
+        }
+        Text(tr("Цвет считывается только вокруг острова; снимок не сохраняется и никуда не отправляется.",
+                "Only the area around the island is sampled; the screenshot is not saved or sent anywhere."),
+            color = Ui.Sub, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(horizontal = 8.dp))
+
         SectionHeader(tr("Материал и эффекты", "Material and effects"))
         SettingsHint(tr("Общие для капсулы и карточек. Пример сверху показывает выбранный вид.", "Shared by the capsule and cards. The preview above shows the selected appearance."))
         ChoiceStrip(listOf(false, true), s.liquidGlass, { if (it) tr("Стекло", "Glass") else tr("Обычная заливка", "Plain fill") }) {

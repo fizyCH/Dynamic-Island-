@@ -6,6 +6,13 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.7.4] — 2026-11-23
+
+### 🖼 Automatic border
+- Restored the border that appears from the background around the island: a thin gray line on dark backgrounds, no line on light ones.
+- The settings are back in Appearance → Color and border → Automatic border: “By screen color” and the fallback “By dark wallpaper”.
+- It works for the capsule and the secondary activity.
+
 ## [1.7.3] — 2026-11-23
 
 ### 🚀 Upstream 1.7.2 merged into the fork

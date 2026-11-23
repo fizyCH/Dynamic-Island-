@@ -49,6 +49,7 @@ import com.akira.island.data.IslandSettings
 import com.akira.island.data.LandscapeMode
 import com.akira.island.data.LockScreenMode
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.WallpaperTone
 import com.akira.island.island.Egg
 import com.akira.island.island.ISLAND_PAD_DP
 import com.akira.island.island.IslandOverlay
@@ -214,6 +215,7 @@ class IslandService : AccessibilityService() {
         }
         connected = true
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        WallpaperTone.start(this)
         IslandBus.landscape.value = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         readRotation()
         // Поворот на 180° (из одной альбомной в другую) конфигурацию не меняет — о нём сообщает только экран
@@ -254,6 +256,15 @@ class IslandService : AccessibilityService() {
         scope.launch {
             IslandBus.calls.map { calls -> calls.values.any { it.incoming } }.distinctUntilChanged()
                 .collect { ringing -> if (!ringing) IslandBus.callHidden.value = false }
+        }
+
+        // Автоматическая обводка: пока включена настройка, раз в пару секунд смотрим фон вокруг острова
+        scope.launch {
+            while (isActive) {
+                if (SettingsRepo.current.autoOutlineOnScreen && IslandBus.screenOn.value) sampleScreenTone()
+                else ScreenTone.clear()
+                delay(2_000)
+            }
         }
 
         // То, что умеет только служба: скриншот, блокировка, выключение и прокрутка по жесту
@@ -595,6 +606,50 @@ class IslandService : AccessibilityService() {
         handler.postAtTime(touchUpdate, minOf(now + TOUCH_QUIET_MS, touchSince + TOUCH_MAX_WAIT_MS))
     }
 
+    private fun sampleScreenTone() {
+        if (!SettingsRepo.current.autoOutlineOnScreen || !IslandBus.screenOn.value) {
+            ScreenTone.clear()
+            return
+        }
+        val regions = screenToneRegions()
+        if (regions.isNotEmpty()) ScreenTone.sample(this, regions)
+    }
+
+    /**
+     * Полоски фона вокруг острова в координатах экрана: под ним и по бокам. Внутрь острова
+     * и его тени не заходим, иначе чёрная капсула всегда считалась бы тёмным фоном.
+     */
+    private fun screenToneRegions(): List<Rect> {
+        val view = display ?: return emptyList()
+        if (body.isEmpty && bubble.isEmpty) return emptyList()
+        val origin = IntArray(2)
+        view.getLocationOnScreen(origin)
+        val ox = origin[0].toFloat()
+        val oy = origin[1].toFloat()
+        fun shifted(r: Rect) = Rect(r.left + ox, r.top + oy, r.right + ox, r.bottom + oy)
+        val b = if (body.isEmpty) null else shifted(body)
+        val u = if (bubble.isEmpty) null else shifted(bubble)
+        val area = when {
+            b == null -> u ?: return emptyList()
+            u == null -> b
+            else -> Rect(minOf(b.left, u.left), minOf(b.top, u.top), maxOf(b.right, u.right), maxOf(b.bottom, u.bottom))
+        }
+        val screenW = resources.displayMetrics.widthPixels.toFloat()
+        val screenH = resources.displayMetrics.heightPixels.toFloat()
+        val gap = dp(18).toFloat()
+        val band = dp(14).toFloat()
+        val side = dp(10).toFloat()
+        val out = ArrayList<Rect>(3)
+        val belowTop = area.bottom + gap
+        val belowBottom = (belowTop + band).coerceAtMost(screenH)
+        if (belowBottom - belowTop >= dp(6)) out += Rect(area.left, belowTop, area.right, belowBottom)
+        val leftEdge = area.left - gap
+        if (leftEdge - side >= 0f) out += Rect((leftEdge - side).coerceAtLeast(0f), area.top, leftEdge, area.bottom)
+        val rightEdge = area.right + gap
+        if (rightEdge + side <= screenW) out += Rect(rightEdge, area.top, (rightEdge + side).coerceAtMost(screenW), area.bottom)
+        return out
+    }
+
     private fun updateTouchWindow() {
         val view = touch ?: return
         val area = when {
@@ -890,6 +945,8 @@ class IslandService : AccessibilityService() {
         alarmMonitor?.stop()
         privacyMonitor?.stop()
         privacyMonitor = null
+        ScreenTone.clear()
+        WallpaperTone.stop(this)
         scope.cancel()
         touch?.let { runCatching { wm?.removeView(it) } }
         display?.let { runCatching { wm?.removeView(it) } }

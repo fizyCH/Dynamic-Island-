@@ -278,6 +278,10 @@ data class IslandSettings(
     val outlineColor: Long = 0xFF3A3A40,
     val outlineWidth: Float = 1f,
     val outlineFromArt: Boolean = true,
+    /** Обводка по цвету на экране вокруг острова: тёмный фон — серая рамка, светлый — без неё */
+    val autoOutlineOnScreen: Boolean = true,
+    /** Резерв: обводка по тёмным обоям, если чтение цвета экрана выключено */
+    val autoOutlineOnDark: Boolean = false,
     val shadow: Boolean = false,
 
     // Цвет кнопок в карточке уведомления

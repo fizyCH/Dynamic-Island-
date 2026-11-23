@@ -340,6 +340,8 @@ object Tints {
     val Purple = Color(0xFFBF5AF2)
     val Teal = Color(0xFF64D2FF)
     val Gray = Color(0xFF8E8E93)
+    /** Автообводка на тёмном фоне — чуть темнее обычного серого. */
+    val AutoOutline = Color(0xFF747479)
     val Lavender = Color(0xFFC6C3F7)
 }
 
