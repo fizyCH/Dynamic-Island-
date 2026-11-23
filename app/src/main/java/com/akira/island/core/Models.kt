@@ -195,7 +195,12 @@ data class TimerState(
     val paused: Boolean get() = pausedLeft != null && !ringing
 }
 
-data class StopwatchState(val startedAt: Long?, val accumulated: Long) {
+data class StopwatchState(
+    val startedAt: Long?,
+    val accumulated: Long,
+    /** Отметки (флажки): общий отсчёт в момент каждой метки */
+    val laps: List<Long> = emptyList(),
+) {
     fun elapsed(now: Long): Long = accumulated + (startedAt?.let { now - it } ?: 0)
     val running: Boolean get() = startedAt != null
 }

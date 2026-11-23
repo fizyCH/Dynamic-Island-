@@ -8,14 +8,13 @@ class PendingAlarmPresentationTest {
     private val alarm = Act.AlarmA(AlarmInfo(123456L, null, null))
     private val other = Act.InboxA(emptyList())
 
-    @Test fun alarmAloneLeavesTheCapsuleIdleAndUsesTheBubble() {
-        assertEquals(Act.Idle, primaryWithPendingAlarm(listOf(alarm), false, null))
-        assertEquals(alarm, secondaryWithPendingAlarm(listOf(alarm), Act.Idle))
+    @Test fun alarmAloneUsesTheMainCapsuleLikeTheOldFork() {
+        assertEquals(alarm, primaryWithPendingAlarm(listOf(alarm), false, null))
+        assertEquals(null, secondaryWithPendingAlarm(listOf(alarm), alarm))
     }
-    @Test fun explicitAlarmSelectionOpensItsCardUntilCollapse() {
+    @Test fun explicitAlarmSelectionStillOpensItsCard() {
         assertEquals(alarm, primaryWithPendingAlarm(listOf(alarm), true, "alarm"))
-        assertEquals(Act.Idle, primaryWithPendingAlarm(listOf(alarm), false, "alarm"))
-        assertEquals(Act.Idle, primaryWithPendingAlarm(listOf(alarm), true, "idle"))
+        assertEquals(alarm, primaryWithPendingAlarm(listOf(alarm), false, "alarm"))
     }
     @Test fun otherActivitiesKeepTheirPriorityAndAreNotDuplicated() {
         assertEquals(other, primaryWithPendingAlarm(listOf(alarm, other), false, null))

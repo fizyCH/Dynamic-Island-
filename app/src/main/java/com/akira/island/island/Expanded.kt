@@ -553,20 +553,32 @@ private fun StopwatchExpanded(w: StopwatchState) {
     val now = rememberNow(100, active = w.running)
     val elapsed = w.elapsed(now)
     Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
         RoundButton(if (w.running) Ios.pause else Ios.play, size = 50.dp,
             bg = Tints.Orange.copy(alpha = 0.25f), fg = Tints.Orange, iconScale = 0.5f) { Controls.toggleStopwatch() }
         Spacer(Modifier.width(12.dp))
         if (w.running) {
-            RoundButton(Ios.close, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) { Controls.stopStopwatch() }
+            // Флажок вместо сброса: ставит метку на текущем времени
+            RoundButton(Icons.Rounded.Flag, size = 44.dp, bg = Tints.Orange.copy(alpha = 0.25f),
+                fg = Tints.Orange, iconScale = 0.52f) { Controls.lapStopwatch() }
         } else {
-            RoundButton(Ios.refresh, size = 50.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.46f) {
-                Controls.startStopwatch()
-                Controls.toggleStopwatch()
+            RoundButton(Ios.close, size = 44.dp, bg = Color.White.copy(alpha = 0.2f), iconScale = 0.44f) {
+                Controls.stopStopwatch()
             }
         }
         Spacer(Modifier.weight(1f))
-        Text(formatDuration(elapsed) + ",%d".format((elapsed % 1000) / 100), color = Tints.Orange, fontSize = 40.sp,
-            style = Digits.copy(fontWeight = FontWeight.Normal.island), maxLines = 1)
+        Column(horizontalAlignment = Alignment.End) {
+            if (w.laps.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Flag, null, tint = Tints.Orange.copy(alpha = 0.7f), modifier = Modifier.size(11.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${w.laps.size}", color = Tints.Orange.copy(alpha = 0.7f), fontSize = 12.sp, style = Digits)
+                }
+            }
+            Text(formatDuration(elapsed) + ",%d".format((elapsed % 1000) / 100), color = Tints.Orange, fontSize = 40.sp,
+                style = Digits.copy(fontWeight = FontWeight.Normal.island), maxLines = 1)
+        }
     }
 }
 
@@ -663,7 +675,13 @@ private fun ChronoExpanded(c: ChronoInfo, s: IslandSettings) {
                 if (kind == RecordingKind.VOICE) {
                     RecordingWave(Modifier.weight(1f).height(22.dp).semantics { contentDescription = kind.title }, !s.reduceEffects && c.pausedMs == null)
                 } else {
-                    Icon(kind.icon, kind.title, tint = Tints.Red, modifier = Modifier.size(28.dp))
+                    if (kind == RecordingKind.SCREEN) {
+                        // Запись экрана — мигающая точка, как индикатор записи, а не значок ноутбука.
+                        RecordingDot(Tints.Red, !s.reduceEffects && c.pausedMs == null,
+                            Modifier.size(28.dp).semantics { contentDescription = kind.title })
+                    } else {
+                        Icon(kind.icon, kind.title, tint = Tints.Red, modifier = Modifier.size(28.dp))
+                    }
                     Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.width(12.dp))

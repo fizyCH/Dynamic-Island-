@@ -6,6 +6,15 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.7.6] — 2026-11-23
+
+### ♻️ Old fork behavior
+- 🎙 Expanded screen recording now shows a blinking red dot instead of a laptop icon.
+- 🚩 The built-in stopwatch has lap flags and a lap counter again.
+- ⏸ Pausing a timer, stopwatch or recording no longer collapses its card.
+- ⏰ An alarm with no other activity is shown in the main capsule again; it stays in the bubble when another activity exists.
+- 📶 The hotspot card is shown whenever the hotspot is on again.
+
 ## [1.7.5] — 2026-11-23
 
 ### ♻️ Fork features restored

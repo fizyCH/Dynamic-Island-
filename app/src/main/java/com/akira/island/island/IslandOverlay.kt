@@ -289,7 +289,9 @@ fun IslandOverlay(
             persistent.add(at, Act.MediaA(m))
         }
         if (s.cardProgress) groupedProgress(progress.values.toList())?.let { persistent += Act.ProgressA(it) }
-        if (s.evHotspot && hotspot.enabled == true) persistent += Act.HotspotA(hotspot)
+        // В форке карточка точки доступа показывается всегда, пока она включена; evHotspot
+        // остаётся настройкой события «точка доступа включена/выключена», а не самой карточки.
+        if (hotspot.enabled == true) persistent += Act.HotspotA(hotspot)
         // «Только при подключении» — зарядка не занимает остров всё время, пока телефон заряжается
         if (s.cardCharging && battery.charging && !s.chargingBrief) persistent += Act.ChargingA(battery)
         if (s.historyMinutes != 0 && inbox.isNotEmpty()) persistent += Act.InboxA(inbox)
@@ -332,6 +334,10 @@ fun IslandOverlay(
     val secondary = if (activitiesHidden || !s.bubble || primary.transient || incoming || calibrating || s.collapseOnShade && shadeOpen) null
     else secondaryWithPendingAlarm(acts, primary)
     val showExpanded = !activitiesHidden && expanded && !primary.transient && !incoming && !calibrating && !(s.collapseOnShade && shadeOpen)
+    // На паузе таймер и секундомер не должны исчезать из-за автосворачивания
+    val pausedFocus = (primary as? Act.TimerA)?.t?.paused == true ||
+        (primary as? Act.StopwatchA)?.w?.running == false ||
+        (primary as? Act.ChronoA)?.c?.pausedMs != null
     val h = s.height.dp
 
     // Пузырь уходит с анимацией, поэтому помним последнюю активность в нём
@@ -343,12 +349,19 @@ fun IslandOverlay(
 
     // Раскрытая активность пропала (музыку закрыли, таймер отменили) — сворачиваемся, а не показываем часы
     val focusGone = expanded && focus != null && focus != Act.Idle.id && acts.none { it.id == focus }
-    LaunchedEffect(focusGone) { if (focusGone) Controls.collapse() }
+    LaunchedEffect(focusGone, focus) {
+        if (!focusGone) return@LaunchedEffect
+        // Плеер на миг теряет метаданные, пока готовит следующий трек, — не сворачиваем карточку сразу.
+        // «Часы» и диктофон на паузе тоже могут пересоздать уведомление: даём ему время вернуться.
+        if (focus == "media") delay(3_000)
+        else if (focus == "timer" || focus == "stopwatch" || focus == "chrono") delay(2_000)
+        Controls.collapse()
+    }
 
     // «Сворачивать раскрытый остров»: если его столько секунд не трогают, он сворачивается сам
-    LaunchedEffect(showExpanded, s.autoCollapseSec) {
+    LaunchedEffect(showExpanded, s.autoCollapseSec, pausedFocus) {
         val limit = s.autoCollapseSec * 1000L
-        if (!showExpanded || limit <= 0) return@LaunchedEffect
+        if (!showExpanded || limit <= 0 || pausedFocus) return@LaunchedEffect
         val opened = SystemClock.elapsedRealtime()
         while (true) {
             val idle = SystemClock.elapsedRealtime() - maxOf(opened, IslandBus.lastTouch)
