@@ -1,7 +1,9 @@
 package com.akira.island.ui
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.service.quicksettings.TileService
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -64,7 +66,9 @@ import com.akira.island.R
 import com.akira.island.core.LangScope
 import com.akira.island.core.tr
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.LauncherVisibility
 import com.akira.island.ui.screens.AnimScreen
+import com.akira.island.ui.screens.SearchScreen
 import com.akira.island.ui.screens.AppInfoScreen
 import com.akira.island.ui.screens.BannersScreen
 import com.akira.island.ui.screens.BanksScreen
@@ -78,12 +82,17 @@ import com.akira.island.ui.screens.EventsScreen
 import com.akira.island.ui.screens.FeaturesScreen
 import com.akira.island.ui.screens.GesturesScreen
 import com.akira.island.ui.screens.HomeScreen
+import com.akira.island.ui.screens.SupportScreen
 import com.akira.island.ui.screens.IdeaScreen
 import com.akira.island.ui.screens.InstructionScreen
 import com.akira.island.ui.screens.KeepAliveScreen
 import com.akira.island.ui.screens.LookScreen
 import com.akira.island.ui.screens.LyricsScreen
+import com.akira.island.ui.screens.LauncherScreen
 import com.akira.island.ui.screens.NotificationsScreen
+import com.akira.island.ui.screens.NotifAppsScreen
+import com.akira.island.ui.screens.NotifDiagScreen
+import com.akira.island.ui.screens.FontScreen
 import com.akira.island.ui.screens.PayDiagScreen
 import com.akira.island.ui.screens.PermissionsScreen
 import com.akira.island.ui.screens.SizeScreen
@@ -93,32 +102,50 @@ import com.akira.island.update.UpdateChecker
 
 enum class Screen {
     CARDS, EVENTS, GESTURES, LYRICS, SIZE, COLORS, INSTRUCTION, ABOUT, DIAG, LOOK, ANIM, EFFECTS, BANNERS,
-    PERMISSIONS, TESTS, NOTIFICATIONS, BEHAVIOR, PAYDIAG, KEEPALIVE, BANKS,
+    PERMISSIONS, TESTS, NOTIFICATIONS, BEHAVIOR, PAYDIAG, KEEPALIVE, BANKS, NOTIF_APPS, NOTIF_DIAG, FONT, EXTRAS, SEARCH, LAUNCHER, SUPPORT,
 }
 
 class MainActivity : ComponentActivity() {
+    private var launcherSettingsRequest by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SettingsRepo.init(this)
+        openSettingsFrom(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
-        setContent { IslandTheme { AppRoot() } }
+        setContent { IslandTheme { AppRoot(launcherSettingsRequest) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openSettingsFrom(intent)
+    }
+
+    private fun openSettingsFrom(intent: Intent) {
+        LauncherVisibility.onSettingsOpened(this, intent)
+        if (intent.action == TileService.ACTION_QS_TILE_PREFERENCES ||
+            intent.action == Intent.ACTION_APPLICATION_PREFERENCES
+        ) launcherSettingsRequest++
     }
 
     override fun onResume() {
         super.onResume()
+        LauncherVisibility.refresh(this)
         // «Не выгружать остров»: из фона Android может не запустить службу — запускаем, пока приложение открыто
         KeepAliveService.sync(this)
     }
 }
 
 @Composable
-private fun AppRoot() {
+private fun AppRoot(launcherSettingsRequest: Int) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var stack by remember { mutableStateOf(listOf<Screen>()) }
     var forward by remember { mutableStateOf(true) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val open: (Screen) -> Unit = {
         forward = true
         stack = stack + it
@@ -128,6 +155,13 @@ private fun AppRoot() {
         stack = stack.dropLast(1)
     }
     BackHandler(enabled = stack.isNotEmpty(), onBack = back)
+    LaunchedEffect(launcherSettingsRequest) {
+        if (launcherSettingsRequest > 0) {
+            tab = 3
+            forward = true
+            stack = listOf(Screen.LAUNCHER)
+        }
+    }
 
     // Проверка обновлений форка на GitHub при открытии приложения
     val context = LocalContext.current
@@ -152,10 +186,12 @@ private fun AppRoot() {
                 label = "nav",
             ) { k ->
                 when (k) {
+                    Screen.SEARCH.name -> SearchScreen(searchQuery, { searchQuery = it }, back, open)
                     "tab0" -> HomeScreen(open)
                     "tab1" -> FeaturesScreen(open)
                     "tab2" -> CapsuleScreen(open)
                     "tab3" -> AppInfoScreen(open)
+                    Screen.EXTRAS.name -> com.akira.island.ui.screens.ExtrasScreen(back)
                     Screen.CARDS.name -> CardsScreen(back) { open(Screen.INSTRUCTION) }
                     Screen.EVENTS.name -> EventsScreen(back)
                     Screen.GESTURES.name -> GesturesScreen(back)
@@ -164,9 +200,11 @@ private fun AppRoot() {
                     Screen.COLORS.name -> ColorsScreen(back)
                     Screen.INSTRUCTION.name -> InstructionScreen(back)
                     Screen.ABOUT.name -> IdeaScreen(back)
+                    Screen.SUPPORT.name -> SupportScreen(back)
                     Screen.DIAG.name -> DiagScreen(back)
                     Screen.PAYDIAG.name -> PayDiagScreen(back)
                     Screen.KEEPALIVE.name -> KeepAliveScreen(back)
+                    Screen.LAUNCHER.name -> LauncherScreen(back)
                     Screen.BANKS.name -> BanksScreen(back)
                     Screen.LOOK.name -> LookScreen(back)
                     Screen.ANIM.name -> AnimScreen(back)
@@ -174,7 +212,10 @@ private fun AppRoot() {
                     Screen.BANNERS.name -> BannersScreen(back)
                     Screen.PERMISSIONS.name -> PermissionsScreen(back, open)
                     Screen.TESTS.name -> TestsScreen(back)
-                    Screen.NOTIFICATIONS.name -> NotificationsScreen(back)
+                    Screen.NOTIFICATIONS.name -> NotificationsScreen(back, open)
+                    Screen.NOTIF_APPS.name -> NotifAppsScreen(back)
+                    Screen.NOTIF_DIAG.name -> NotifDiagScreen(back)
+                    Screen.FONT.name -> FontScreen(back)
                     Screen.BEHAVIOR.name -> BehaviorScreen(back)
                 }
             }

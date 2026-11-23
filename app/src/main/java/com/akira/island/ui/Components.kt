@@ -89,12 +89,13 @@ fun Page(
     onBack: (() -> Unit)? = null,
     subtitle: String? = null,
     action: (@Composable () -> Unit)? = null,
+    preview: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val scroll = rememberScrollState()
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+        Modifier.fillMaxSize()
+            .then(if (preview == null) Modifier.verticalScroll(scroll) else Modifier)
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
@@ -134,9 +135,19 @@ fun Page(
             )
         }
         Spacer(Modifier.height(18.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
-        Spacer(Modifier.height(130.dp))
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        if (preview != null) {
+            preview()
+            Spacer(Modifier.height(12.dp))
+            Column(Modifier.weight(1f).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+                Spacer(Modifier.height(130.dp))
+                Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+            Spacer(Modifier.height(130.dp))
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
     }
 }
 
@@ -269,6 +280,33 @@ fun GroupItem(
         if (trailing != null) {
             Spacer(Modifier.width(12.dp))
             trailing()
+        }
+    }
+}
+
+/** Строка списка со своим значком слева (например, значком приложения) вместо векторного. */
+@Composable
+fun GroupRow(
+    pos: Pos,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    leading: @Composable () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(pos.shape())
+            .background(Ui.Card)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading()
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Ui.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 21.sp)
+            if (subtitle != null) Text(subtitle, color = Ui.Sub, fontSize = 15.sp, lineHeight = 19.sp)
         }
     }
 }

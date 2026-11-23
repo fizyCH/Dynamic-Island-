@@ -12,6 +12,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.State
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.GraphicsLayerScope
@@ -46,20 +48,24 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -76,7 +82,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -86,7 +91,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
@@ -101,16 +112,20 @@ import com.akira.island.core.Lyrics
 import com.akira.island.core.NoticeStyle
 import com.akira.island.core.Tints
 import com.akira.island.core.tr
+import com.akira.island.core.trf
+import com.akira.island.data.usesCardSurface
+import com.akira.island.data.BubbleSide
 import com.akira.island.data.Elasticity
+import com.akira.island.data.MessageStyle
 import com.akira.island.data.ExpandStyle
 import com.akira.island.data.IslandSettings
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.shouldTimeOutIdle
 import com.akira.island.data.TapAction
-import com.akira.island.data.WallpaperTone
 import com.akira.island.service.CallMonitor
 import com.akira.island.service.NavScreen
+import com.akira.island.service.Inbox
 import com.akira.island.service.PayMonitor
-import com.akira.island.service.ScreenTone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -134,19 +149,18 @@ private data class Frame(val act: Act, val expanded: Boolean) {
 
 @Composable
 fun IslandOverlay(
-    onTransition: () -> Unit = {},
     onBodyBounds: (Rect) -> Unit = {},
     onBubbleBounds: (Rect) -> Unit = {},
+    onBackdropShape: ((BackdropGeometry) -> Unit)? = null,
+    onBackdropSampler: (((() -> Unit)?) -> Unit)? = null,
 ) {
     val saved by SettingsRepo.state.collectAsState()
     val powerSave by IslandBus.powerSave.collectAsState()
     val privacyCamera by IslandBus.privacyCamera.collectAsState()
     val privacyMic by IslandBus.privacyMic.collectAsState()
-    val keyguard by IslandBus.keyguard.collectAsState()
     // В энергосбережении Android с «Экономией заряда» остров обходится без живых эффектов
     val s = remember(saved, powerSave) { saved.forPowerSave(powerSave) }
     val media by IslandBus.media.collectAsState()
-    val hotspot by IslandBus.hotspot.collectAsState()
     val lyrics by IslandBus.lyrics.collectAsState()
     val progress by IslandBus.progress.collectAsState()
     val chrono by IslandBus.chrono.collectAsState()
@@ -164,6 +178,11 @@ fun IslandOverlay(
     val nextAlarm by IslandBus.nextAlarm.collectAsState()
     val egg by IslandBus.egg.collectAsState()
     val payReady by IslandBus.payReady.collectAsState()
+    val inbox by IslandBus.inbox.collectAsState()
+    val weather by com.akira.island.service.WeatherRepo.state.collectAsState()
+    val extras by com.akira.island.data.ExtrasRepo.state.collectAsState()
+    val hotspot by com.akira.island.service.HotspotMonitor.state.collectAsState()
+    val shadeOpen by IslandBus.shadeOpen.collectAsState()
     // Будильник появляется в острове за 12 часов и уходит, когда прозвенел: просыпаемся ровно в эти два момента,
     // а не каждые полминуты. Пока телефон спит, ожидание стоит — поэтому со включением экрана пересчитываем
     val screenOn by IslandBus.screenOn.collectAsState()
@@ -195,6 +214,17 @@ fun IslandOverlay(
         }
     }
     val chronoActive = chrono.values.filterNot { it.finished(chronoNow) }
+
+    // «История уведомлений»: уведомление уходит из острова ровно к своему сроку; пока экран погашен, ожидание
+    // стоит — со включением экрана пересчитываем. Выключили историю — список очищается
+    LaunchedEffect(inbox, screenOn, s.historyMinutes) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            Inbox.prune(now)
+            val next = Inbox.nextExpiry(now) ?: break
+            delay(next + 50)
+        }
+    }
 
     // Пробная «живая активность» исчезает по времени, даже если таймер удаления не сработал (сон телефона)
     val hasExpiring = live.values.any { it.expiresAt > 0 }
@@ -230,7 +260,12 @@ fun IslandOverlay(
     val acts = buildList {
         // Входящий звонок важнее всего, как на iPhone
         if (call != null && call.incoming && !callHidden) add(Act.CallA(call))
-        notice?.let { add(Act.NoticeA(it)) }
+        notice?.let { n ->
+            // Hide only the presentation while its source is in front. Do not cancel the Android
+            // notification or remove history; returning before expiry can show the banner again.
+            val source = n.message?.pkg ?: n.live?.pkg ?: n.openPkg ?: n.alarm?.pkg
+            if (!s.hideWhenSourceOpen || source == null || source != foreground) add(Act.NoticeA(n))
+        }
 
         val persistent = mutableListOf<Act>()
         val t = timer
@@ -242,15 +277,26 @@ fun IslandOverlay(
         if (t != null && !t.ringing) persistent += Act.TimerA(t)
         if (s.cardLive) liveActive.maxByOrNull { it.postTime }?.let { persistent += Act.LiveA(it) }
         stopwatch?.let { persistent += Act.StopwatchA(it) }
-        if (s.cardTimer) chronoActive.maxByOrNull { it.postTime }?.let { persistent += Act.ChronoA(it) }
-        hotspot?.let { persistent += Act.HotspotA(it) }
+        chronoActive.filter { if (it.recording) s.cardRecording else s.cardTimer }
+            .maxByOrNull { it.postTime }?.let { persistent += Act.ChronoA(it) }
         val m = media
-        if (s.cardMedia && m != null && !(s.hideWhenPlayerOpen && foreground == m.pkg)) persistent += Act.MediaA(m)
-        if (s.cardProgress) progress.values.maxByOrNull { it.postTime }?.let { persistent += Act.ProgressA(it) }
-        if (s.cardCharging && battery.charging) persistent += Act.ChargingA(battery)
-        // Будильник — тише всех: показывается, только когда больше ничего нет, и не уходит в пузырь
+        if (s.cardMedia && m != null && !(s.hideWhenPlayerOpen && foreground == m.pkg)) {
+            val at = if (s.preferMusic && m.playing) persistent.indexOfFirst {
+                it !is Act.PayA && it !is Act.CallA && !(it is Act.TimerA && it.t.ringing)
+            }.let { if (it < 0) persistent.size else it } else persistent.size
+            persistent.add(at, Act.MediaA(m))
+        }
+        if (s.cardProgress) groupedProgress(progress.values.toList())?.let { persistent += Act.ProgressA(it) }
+        if (s.evHotspot && hotspot.enabled == true) persistent += Act.HotspotA(hotspot)
+        // «Только при подключении» — зарядка не занимает остров всё время, пока телефон заряжается
+        if (s.cardCharging && battery.charging && !s.chargingBrief) persistent += Act.ChargingA(battery)
+        if (s.historyMinutes != 0 && inbox.isNotEmpty()) persistent += Act.InboxA(inbox)
+        if (extras.weatherEnabled && !extras.briefEnabled) weather?.let { persistent += Act.WeatherA(it) }
+        // Ожидающий будильник остаётся доступен в пузырьке, не занимая основную капсулу.
         val alarm = nextAlarm
         if (s.cardAlarm && alarm != null && alarm.triggerAt - alarmNow in 1..ALARM_LEAD_MS) persistent += Act.AlarmA(alarm)
+
+        if (s.hideWhenSourceOpen) persistent.removeAll { it.pkg != null && it.pkg == foreground }
 
         // Выбранная активность выходит вперёд, но звонящий таймер всегда главный
         val ringing = (persistent.firstOrNull() as? Act.TimerA)?.t?.ringing == true || call?.incoming == true
@@ -270,24 +316,20 @@ fun IslandOverlay(
         }
     }
     val previewing = previewNow < previewUntil
-
     val activitiesHidden by IslandBus.activitiesHidden.collectAsState()
+
     // Во время подгонки размера показываем только пустую красную капсулу
     val primary = when {
-        calibrating -> Act.Idle
+        calibrating || s.collapseOnShade && shadeOpen -> Act.Idle
         activitiesHidden -> Act.Idle
         previewing -> Act.LiveA(WidthDemo)
-        else -> acts.firstOrNull() ?: Act.Idle
+        else -> primaryWithPendingAlarm(acts, expanded, focus)
     }
     val incoming = (primary as? Act.CallA)?.c?.incoming == true
     // Вторая активность — кружком рядом, если его не выключили в «Поведении»
-    val secondary = if (activitiesHidden || !s.bubble || primary.transient || incoming || calibrating) null
-    else acts.drop(1).firstOrNull { !it.transient && it !is Act.AlarmA }
-    val showExpanded = !activitiesHidden && expanded && !primary.transient && !incoming && !calibrating
-    // На паузе таймер и секундомер не должны исчезать из-за автосворачивания
-    val pausedFocus = (primary as? Act.TimerA)?.t?.paused == true ||
-        (primary as? Act.StopwatchA)?.w?.running == false ||
-        (primary as? Act.ChronoA)?.c?.pausedMs != null
+    val secondary = if (activitiesHidden || !s.bubble || primary.transient || incoming || calibrating || s.collapseOnShade && shadeOpen) null
+    else secondaryWithPendingAlarm(acts, primary)
+    val showExpanded = !activitiesHidden && expanded && !primary.transient && !incoming && !calibrating && !(s.collapseOnShade && shadeOpen)
     val h = s.height.dp
 
     // Пузырь уходит с анимацией, поэтому помним последнюю активность в нём
@@ -299,19 +341,12 @@ fun IslandOverlay(
 
     // Раскрытая активность пропала (музыку закрыли, таймер отменили) — сворачиваемся, а не показываем часы
     val focusGone = expanded && focus != null && focus != Act.Idle.id && acts.none { it.id == focus }
-    LaunchedEffect(focusGone, focus) {
-        if (!focusGone) return@LaunchedEffect
-        // Плеер на миг теряет метаданные, пока готовит следующий трек, — не сворачиваем карточку сразу.
-        // «Часы» и диктофон на паузе тоже могут пересоздать уведомление: даём ему время вернуться.
-        if (focus == "media") delay(3_000)
-        else if (focus == "timer" || focus == "stopwatch" || focus == "chrono") delay(2_000)
-        Controls.collapse()
-    }
+    LaunchedEffect(focusGone) { if (focusGone) Controls.collapse() }
 
     // «Сворачивать раскрытый остров»: если его столько секунд не трогают, он сворачивается сам
-    LaunchedEffect(showExpanded, s.autoCollapseSec, pausedFocus) {
+    LaunchedEffect(showExpanded, s.autoCollapseSec) {
         val limit = s.autoCollapseSec * 1000L
-        if (!showExpanded || limit <= 0 || pausedFocus) return@LaunchedEffect
+        if (!showExpanded || limit <= 0) return@LaunchedEffect
         val opened = SystemClock.elapsedRealtime()
         while (true) {
             val idle = SystemClock.elapsedRealtime() - maxOf(opened, IslandBus.lastTouch)
@@ -321,34 +356,45 @@ fun IslandOverlay(
         Controls.collapse()
     }
 
-    // Если активности скрыты вручную, пустая капсула должна остаться видимой для свайпа назад
-    val hidden = s.hideIdle && primary is Act.Idle && !showExpanded && !calibrating && !activitiesHidden
-
-    // Перед сменой формы просим окно стать большим, чтобы анимация шла внутри неподвижного окна
-    val transitionKey = "${primary.id}|$showExpanded|${secondary?.id}|$hidden"
-    val lastKey = remember { arrayOfNulls<String>(1) }
-    SideEffect {
-        if (lastKey[0] != transitionKey) {
-            lastKey[0] = transitionKey
-            onTransition()
+    val keyguard by IslandBus.keyguard.collectAsState()
+    val autoHideEligible = shouldTimeOutIdle(s, primary is Act.Idle && secondary == null, showExpanded, calibrating, screenOn, keyguard, shadeOpen)
+    var idleTimedOut by remember { mutableStateOf(false) }
+    var idleWakeRevision by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(autoHideEligible, s.idleHideSec, idleWakeRevision) {
+        idleTimedOut = false
+        if (!autoHideEligible) return@LaunchedEffect
+        val started = SystemClock.elapsedRealtime()
+        val timeout = s.idleHideSec.coerceIn(1, 300) * 1000L
+        // Sleep to the deadline; touches extend it without a polling loop.
+        while (true) {
+            val remaining = timeout - (SystemClock.elapsedRealtime() - maxOf(started, IslandBus.lastTouch))
+            if (remaining <= 0) break
+            delay(remaining)
         }
+        idleTimedOut = true
     }
+    val timedHidden = autoHideEligible && idleTimedOut
+    // Explicitly hiding the empty capsule retains its previous non-interactive behavior.
+    val hidden = timedHidden || s.hideIdle && primary is Act.Idle && secondary == null && !showExpanded && !calibrating &&
+        !activitiesHidden && !(s.evLock && keyguard)
+    val wakeBounds = remember { mutableStateOf(Rect.Zero) }
 
     // Спрятанный остров не ловит касания, даже пока уходит
     if (hidden) {
         SideEffect {
-            onBodyBounds(Rect.Zero)
+            onBodyBounds(if (timedHidden) wakeBounds.value else Rect.Zero)
             onBubbleBounds(Rect.Zero)
         }
     }
     val hiddenNow = rememberUpdatedState(hidden)
+    val timedHiddenNow = rememberUpdatedState(timedHidden)
 
     // Где остров в окне — вокруг него рисуются эффекты пасхалки
     val body = remember { mutableStateOf(Rect.Zero) }
     val onBody = remember(onBodyBounds) {
         { r: Rect ->
             body.value = r
-            onBodyBounds(if (hiddenNow.value) Rect.Zero else r)
+            onBodyBounds(if (hiddenNow.value) { if (timedHiddenNow.value) wakeBounds.value else Rect.Zero } else r)
         }
     }
     val onBubble = remember(onBubbleBounds) { { r: Rect -> onBubbleBounds(if (hiddenNow.value) Rect.Zero else r) } }
@@ -360,8 +406,8 @@ fun IslandOverlay(
         privacyMic -> Tints.Orange
         else -> null
     }
-    // Раскрытый остров сам показывает подробности — капля приватности там только мешает.
-    val privacyOn = privacyColor != null && !showExpanded
+    // Раскрытый остров сам показывает подробности — точка приватности там только мешает.
+    val privacyOn = privacyColor != null && !showExpanded && !calibrating
     var privacyTint by remember { mutableStateOf(Tints.Green) }
     LaunchedEffect(privacyColor) { privacyColor?.let { privacyTint = it } }
 
@@ -378,12 +424,14 @@ fun IslandOverlay(
             enter = if (s.reduceEffects) fadeIn() else scaleIn(islandSpec(s), initialScale = 0.3f, transformOrigin = top) + fadeIn(tween(120)),
             exit = if (s.reduceEffects) fadeOut() else scaleOut(islandSpec(s), targetScale = 0.3f, transformOrigin = top) + fadeOut(tween(160)),
         ) {
-            IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, privacyOn, onBody, onBubble)
+            CompositionLocalProvider(LocalActivities provides acts.filterNot { it.transient }) {
+                IslandRow(slot, s, primary, showExpanded, lyrics, battery, bubbleVisible, lastSecondary[0], calibrating, privacyOn,
+                    onBody, onBubble, onBackdropShape, onBackdropSampler)
+            }
         }
-        // Точка появляется «каплей» из острова справа от камеры: камера — зелёная, микрофон — оранжевая.
-        // При раскрытии острова она прячется, чтобы не мешать содержимому.
+        // Точка появляется «каплей» из острова справа от камеры и прячется при раскрытии.
         AnimatedVisibility(
-            visible = privacyOn && !calibrating,
+            visible = privacyOn && !hidden,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .offset(
@@ -402,15 +450,42 @@ fun IslandOverlay(
                     .background(privacyTint),
             )
         }
+        if (timedHidden) CameraWakeTarget(s, onBounds = { r ->
+            wakeBounds.value = r
+            onBodyBounds(r)
+        }) {
+            IslandBus.lastTouch = SystemClock.elapsedRealtime()
+            idleTimedOut = false
+            idleWakeRevision++
+        }
         if (eggOn) {
             EggSparks { body.value }
             EggDriver({ body.value }, s)
         }
+        com.akira.island.face.FaceUnlockLayer(s, allowed = !calibrating && !shadeOpen &&
+            !showExpanded && !eggOn)
+    }
+}
+
+/** Only the area at the camera remains tappable after a timed hide, not the old wide capsule. */
+@Composable
+internal fun CameraWakeTarget(s: IslandSettings, onBounds: (Rect) -> Unit, onWake: () -> Unit) {
+    val label = tr("Показать остров", "Show the island")
+    Box(Modifier.layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        val room = ((constraints.maxWidth - s.width.dp.roundToPx() - 2 * ISLAND_PAD_DP.dp.roundToPx()) / 2).coerceAtLeast(0)
+        layout(p.width, p.height) { p.place(s.offsetX.dp.roundToPx().coerceIn(-room, room), 0) }
+    }.padding(ISLAND_PAD_DP.dp)) {
+        Box(Modifier.size(s.width.coerceIn(24, 48).dp, s.height.coerceIn(24, 48).dp)
+            .onGloballyPositioned { onBounds(it.boundsInWindow()) }
+            .testTag("idle-island-wake")
+            .semantics { contentDescription = label }
+            .clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = label, onClick = onWake))
     }
 }
 
 @Composable
-private fun IslandRow(
+internal fun IslandRow(
     slot: State<Dp>,
     s: IslandSettings,
     primary: Act,
@@ -423,6 +498,8 @@ private fun IslandRow(
     privacyOn: Boolean,
     onBodyBounds: (Rect) -> Unit,
     onBubbleBounds: (Rect) -> Unit,
+    onBackdropShape: ((BackdropGeometry) -> Unit)? = null,
+    onBackdropSampler: (((() -> Unit)?) -> Unit)? = null,
 ) {
     Row(
         Modifier
@@ -439,10 +516,11 @@ private fun IslandRow(
             .padding(ISLAND_PAD_DP.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // Пустое место слева уравновешивает пузырь, чтобы остров стоял над камерой
-        Spacer(Modifier.animatedWidth(slot))
-        IslandBody(primary, showExpanded, s, lyrics, battery, calibrating, privacyOn, onBodyBounds)
-        BubbleSlot(slot, bubbleVisible, bubbleAct, s, onBubbleBounds)
+        // Пустое место с другой стороны уравновешивает пузырь, чтобы остров стоял над камерой
+        val left = s.bubbleSide == BubbleSide.LEFT
+        if (left) BubbleSlot(slot, bubbleVisible, bubbleAct, s, onBubbleBounds, left = true) else Spacer(Modifier.animatedWidth(slot))
+        IslandBody(primary, showExpanded, s, lyrics, battery, calibrating, privacyOn, onBodyBounds, onBackdropShape, onBackdropSampler)
+        if (left) Spacer(Modifier.animatedWidth(slot)) else BubbleSlot(slot, bubbleVisible, bubbleAct, s, onBubbleBounds, left = false)
     }
 }
 
@@ -459,30 +537,34 @@ private fun Modifier.animatedWidth(width: State<Dp>) = layout { measurable, cons
  * Отдельная функция: внутри Row подставился бы RowScope.AnimatedVisibility.
  */
 @Composable
-private fun BubbleSlot(slot: State<Dp>, visible: Boolean, act: Act?, s: IslandSettings, onBounds: (Rect) -> Unit) {
+private fun BubbleSlot(slot: State<Dp>, visible: Boolean, act: Act?, s: IslandSettings, onBounds: (Rect) -> Unit, left: Boolean) {
+    LaunchedEffect(visible) { if (!visible) onBounds(Rect.Zero) }
     Box(
         Modifier
             .zIndex(-1f)
             .layout { measurable, constraints ->
                 val w = slot.value.roundToPx().coerceAtLeast(0)
                 val p = measurable.measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
-                layout(w, p.height) { p.place(w - p.width, 0) }
-            }
-            .onGloballyPositioned { onBounds(it.boundsInWindow()) },
+                // Справа пузырь прижат к дальнему краю места под него, слева — к ближнему краю экрана; пока место
+                // растёт, он выходит из-под острова
+                layout(w, p.height) { p.place(if (left) 0 else w - p.width, 0) }
+            },
     ) {
-        val drop = TransformOrigin(0f, 0.5f)
+        val drop = TransformOrigin(if (left) 1f else 0f, 0.5f)
         AnimatedVisibility(
             visible && act != null,
             enter = if (s.reduceEffects) fadeIn() else scaleIn(islandSpec(s), initialScale = 0.4f, transformOrigin = drop) + fadeIn(tween(90)),
             exit = if (s.reduceEffects) fadeOut() else scaleOut(islandSpec(s), targetScale = 0.4f, transformOrigin = drop) + fadeOut(tween(120, delayMillis = 60)),
         ) {
-            if (act != null) Bubble(act, s)
+            if (act != null) Box(Modifier.onGloballyPositioned {
+                onBounds(if (visible) it.boundsInWindow() else Rect.Zero)
+            }) { Bubble(act, s) }
         }
     }
 }
 
 @Composable
-private fun IslandBody(
+internal fun IslandBody(
     primary: Act,
     expanded: Boolean,
     s: IslandSettings,
@@ -491,20 +573,26 @@ private fun IslandBody(
     calibrating: Boolean,
     privacyOn: Boolean,
     onBounds: (Rect) -> Unit,
+    onBackdropShape: ((BackdropGeometry) -> Unit)? = null,
+    onBackdropSampler: (((() -> Unit)?) -> Unit)? = null,
 ) {
+    val preview = LocalIslandPreview.current
     val context = LocalContext.current
     val haptic = rememberHaptic()
+    val activities by rememberUpdatedState(LocalActivities.current)
     val scope = rememberCoroutineScope()
     val conf = LocalConfiguration.current
-    // Раскрытый остров iPhone — 371 pt при ширине экрана 393 pt, то есть по 11 с каждой стороны
-    val expandedWidth = (conf.screenWidthDp.dp - 22.dp).coerceAtMost(460.dp)
+    // Раскрытый остров iPhone — 371 pt при ширине экрана 393 pt, то есть по 11 с каждой стороны;
+    // «Ширина раскрытого острова» в «Оформлении» делает его уже
+    val expandedWidth = expandedWidth(conf.screenWidthDp.dp, s)
     val h = s.height.dp
 
     // Скругления — как в ролике: плеер и фонарик 46, навигатор 42, обновление 36, уведомление 32
-    val cornerTarget = when {
+    val cornerDefault = when {
         expanded && (primary is Act.MediaA || primary is Act.TorchA) -> 46.dp
         expanded && primary is Act.LiveA -> 42.dp
         expanded -> 44.dp
+        primary is Act.NoticeA && primary.n.style == NoticeStyle.MESSAGE && s.messageStyle == MessageStyle.PILL -> 40.dp
         primary is Act.NoticeA && (primary.n.style == NoticeStyle.MESSAGE || primary.n.style == NoticeStyle.EGG) -> 32.dp
         primary is Act.NoticeA && primary.n.style == NoticeStyle.UPDATE -> 36.dp
         primary is Act.NoticeA && primary.n.style == NoticeStyle.WIDE && primary.n.title.isNotBlank() -> noticeHeight(s) / 2
@@ -515,22 +603,18 @@ private fun IslandBody(
         primary is Act.Idle -> h / 2
         else -> activeHeight(s) / 2
     }
+    val realDetail by IslandBus.messageDetail.collectAsState()
+    val detail = realDetail && !preview
+    val large = s.usesCardSurface(expanded, (primary as? Act.NoticeA)?.n?.style, detail)
+    val radius = if (large) s.expandedCornerRadius else s.cornerRadius
+    val cornerTarget = if (radius >= 0) radius.dp else cornerDefault
     // Скругление читается при рисовании: кадр раскрытия перерисовывает рамку и стекло, а не пересобирает остров
     val corner = animateDpAsState(cornerTarget, islandSpec(s), label = "corner")
-    // Точка приватности стоит чуть правее выреза. Раздвигаем содержимое вокруг камеры на её ширину,
+    // Точка приватности стоит чуть правее выреза. Раздвигаем компактное содержимое вокруг камеры,
     // чтобы правый текст не оказался под точкой; капсула от этого немного расширяется.
     val privacyGap = animateDpAsState(if (privacyOn) 30.dp else 0.dp, islandSpec(s), label = "privacyGap")
-    val shape = remember(corner, s.notch) { AnimatedIslandShape(corner, s.notch) }
-    val accent = (primary as? Act.MediaA)?.m?.accent
-    val outlineColor = if (s.outlineFromArt && accent != null) accent else Color(s.outlineColor)
-    // Автообводка: по цвету экрана вокруг острова, а если это выключено — по тёмным обоям
-    val darkWallpaper by WallpaperTone.dark.collectAsState()
-    val darkScreen by ScreenTone.dark.collectAsState()
-    val autoOutline = !s.outline && when {
-        s.autoOutlineOnScreen -> darkScreen
-        s.autoOutlineOnDark -> darkWallpaper
-        else -> false
-    }
+    val shape = remember(corner, s.notch, s.notchTopRadius) { AnimatedIslandShape(corner, s.notch, s.notchTopRadius) }
+    val accent = primary.surfaceAccent()
 
     // Свечение цвета обложки, пока играет музыка («Эффекты»): с треком цвет плавно меняется, с паузой гаснет
     val playingArt = (primary as? Act.MediaA)?.m?.takeIf { it.playing }?.accent
@@ -566,6 +650,18 @@ private fun IslandBody(
     // Оттягивание вниз пальцем
     val pull = remember { Animatable(0f) }
 
+    // Liquid Glass: при смене содержимого по стеклу пробегает блик, при наклоне телефона блики сдвигаются
+    val tilt = IslandBus.glassTilt.collectAsState()
+    val previewTilt = LocalGlassTilt.current
+    val sheen = remember { Animatable(-1f) }
+    LaunchedEffect(primary.id, expanded, s.liquidGlass, s.reduceEffects) {
+        sheen.snapTo(-1f)
+        if (!s.liquidGlass || s.reduceEffects) return@LaunchedEffect
+        sheen.snapTo(0f)
+        sheen.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
+        sheen.snapTo(-1f)
+    }
+
     // Короткая пилюля (режим звука) вздрагивает вбок, как остров на iPhone при переключении «Звонок/Бесшумно»
     val shake = remember { Animatable(0f) }
     val pillId = (primary as? Act.NoticeA)?.n?.takeIf { it.style == NoticeStyle.PILL }?.id
@@ -577,34 +673,54 @@ private fun IslandBody(
     val current by rememberUpdatedState(primary)
     val isExpanded by rememberUpdatedState(expanded)
     val settings by rememberUpdatedState(s)
-    val egg by IslandBus.egg.collectAsState()
-
+    val realEgg by IslandBus.egg.collectAsState()
+    val egg = realEgg && !preview
+    // Native material follows the drawn contour, including spring/drag transforms.
+    // Touch bounds retain their existing behavior.
+    val reportedBackdrop = remember { arrayOfNulls<BackdropGeometry>(1) }
+    val backdropCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val backdropDensity = LocalDensity.current
+    fun reportBackdrop() {
+        if (s.liquidGlass && !preview && onBackdropShape != null) {
+            val c = backdropCoordinates[0]?.takeIf { it.isAttached && it.size.width > 0 && it.size.height > 0 } ?: return
+            val origin = c.localToWindow(Offset.Zero)
+            val x = c.localToWindow(Offset(c.size.width.toFloat(), 0f))
+            val y = c.localToWindow(Offset(0f, c.size.height.toFloat()))
+            val scale = maxOf((x-origin).getDistance()/c.size.width, (y-origin).getDistance()/c.size.height)
+            val geometry = BackdropGeometry(c.boundsInWindow(),
+                with(backdropDensity) { corner.value.toPx() }*scale,
+                with(backdropDensity) { (if (s.notch) s.notchTopRadius.dp else corner.value).toPx() }*scale,
+                !calibrating && !egg && scale.isFinite(), large)
+            if (reportedBackdrop[0] != geometry) {
+                reportedBackdrop[0] = geometry
+                onBackdropShape(geometry)
+            }
+        }
+    }
+    DisposableEffect(onBackdropSampler, s.liquidGlass, s.notch, s.notchTopRadius, large, calibrating, egg, preview, backdropDensity) {
+        onBackdropSampler?.invoke { reportBackdrop() }
+        onDispose { onBackdropSampler?.invoke(null) }
+    }
     Box(
         Modifier
             .onGloballyPositioned { onBounds(it.boundsInWindow()) }
             .graphicsLayer {
                 // Пасхалка: остров подпрыгивает в такт песни; оплата прошла — на миг подрастает
-                val bump = Egg.bump() * PayFx.pop.floatValue
+                val bump = if (preview) 1f else Egg.bump() * PayFx.pop.floatValue
                 scaleX = jellyX.value * (1f + 0.03f * pull.value) * bump
                 scaleY = jellyY.value * (1f + 0.08f * pull.value) * bump
                 translationX = shake.value.dp.toPx()
                 transformOrigin = TransformOrigin(0.5f, 0f)
             }
+            .onGloballyPositioned { backdropCoordinates[0] = it; reportBackdrop() }
+            .then(if (s.liquidGlass && !preview && onBackdropShape != null) Modifier.drawWithContent {
+                reportBackdrop()
+                drawContent()
+            } else Modifier)
             .then(if (glowAlpha > 0f) Modifier.drawBehind { islandGlow(glowTint, glowAlpha, corner.value.toPx(), s.notch) } else Modifier)
-            // Тень и обрезка по форме — одним слоем; форма на каждом кадре берётся из анимации скругления
-            .graphicsLayer {
-                this.shape = islandShape(corner.value, s.notch)
-                clip = true
-                if (s.shadow && !s.reduceEffects) shadowElevation = 10.dp.toPx()
-            }
-            .background(if (calibrating) CalibrationRed else Color(s.color))
             .then(
-                when {
-                    calibrating -> Modifier.border(2.dp, Color.White, shape)
-                    s.outline -> Modifier.border(s.outlineWidth.dp, outlineColor, shape)
-                    autoOutline -> Modifier.border(1.dp, Tints.AutoOutline, shape)
-                    else -> Modifier
-                },
+                if (calibrating) Modifier.clip(shape).background(CalibrationRed).border(2.dp, Color.White, shape)
+                else Modifier.islandSurface(s, large, shape, accent, tilt = { previewTilt ?: tilt.value }, sheen = { sheen.value }),
             )
             .then(
                 if (egg && !calibrating) {
@@ -616,6 +732,7 @@ private fun IslandBody(
                     Modifier
                 },
             )
+            .then(if (preview) Modifier else Modifier
             // Любое касание — раскрытый остров не свернётся сам из-под пальца
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -641,10 +758,8 @@ private fun IslandBody(
                     }
                 }
                 detectTapGestures(
-                    onTap = {
-                        haptic()
-                        onTap(context, current, isExpanded, settings)
-                    },
+                    onPress = { haptic() },
+                    onTap = { onTap(context, current, isExpanded, settings) },
                     onDoubleTap = onDouble,
                     onLongPress = onLong,
                 )
@@ -680,7 +795,6 @@ private fun IslandBody(
                             !isExpanded && horizontal && !IslandBus.activitiesHidden.value &&
                                 !act.transient && act !is Act.Idle &&
                                 ((fromLeft && dx > 0) || (fromRight && dx < 0)) -> {
-                                // Свайп от края к центру прячет активность, оставляя пустую капсулу
                                 haptic()
                                 IslandBus.activitiesHidden.value = true
                                 Controls.collapse()
@@ -695,9 +809,16 @@ private fun IslandBody(
                                 Controls.collapse()
                             }
                             // Смахнуть уведомление вверх, как баннер на iPhone. Порог полный, чтобы палец,
-                            // чуть съехавший при нажатии «Ответить», не убирал плашку
+                            // чуть съехавший при нажатии «Ответить», не убирал плашку.
+                            // Сообщение приложения при этом отменяется и в самой шторке уведомлений.
                             !isExpanded && vertical && dy < -threshold && act is Act.NoticeA -> {
-                                IslandBus.notice.value = null
+                                val key = act.n.message?.key
+                                if (key != null && com.akira.island.service.NotifListener.canDismiss(key)) {
+                                    haptic()
+                                    com.akira.island.service.NotifListener.dismiss(key)
+                                } else {
+                                    IslandBus.notice.value = null
+                                }
                             }
                             // Подсказку оплаты тоже можно смахнуть
                             !isExpanded && vertical && dy < -threshold && act is Act.PayA -> PayMonitor.clearReady()
@@ -705,6 +826,11 @@ private fun IslandBody(
                             !isExpanded && vertical && dy < -threshold && act is Act.CallA && act.c.incoming -> {
                                 haptic()
                                 Controls.hideIncomingCall()
+                            }
+                            !isExpanded && horizontal && settings.swipeActivities && activities.size > 1 -> {
+                                val i = activities.indexOfFirst { it.id == act.id }.coerceAtLeast(0)
+                                val next = Math.floorMod(i + if (dx < 0) 1 else -1, activities.size)
+                                IslandBus.focus.value = activities[next].id
                             }
                             !isExpanded && horizontal && act is Act.MediaA && settings.swipeTracks -> {
                                 haptic()
@@ -723,7 +849,7 @@ private fun IslandBody(
                         }
                     },
                 )
-            },
+            }),
     ) {
         // Смена содержимого: с «Жидким раскрытием» новое вырастает из прежнего вместе с формой острова,
         // без него — прежнее перетекание. Форма в обоих случаях меняется пружиной из «Раскрытия острова»
@@ -774,6 +900,7 @@ private fun classicChange(s: IslandSettings): ContentTransform {
 @Composable
 private fun AnimatedVisibilityScope.classicFlow(s: IslandSettings): Modifier {
     val m = motionScale(s)
+    val blurCache = remember { BlurEffectCache() }
     val blur = transition.animateFloat(
         transitionSpec = {
             if (targetState == EnterExitState.Visible) tween((300 * m).toInt(), delayMillis = (100 * m).toInt(), easing = ExpoOut)
@@ -788,7 +915,7 @@ private fun AnimatedVisibilityScope.classicFlow(s: IslandSettings): Modifier {
             else -> 0f
         }
     }
-    return Modifier.graphicsLayer { blurLayer(blur.value) }
+    return Modifier.graphicsLayer { blurLayer(blur.value, blurCache) }
 }
 
 /**
@@ -798,6 +925,7 @@ private fun AnimatedVisibilityScope.classicFlow(s: IslandSettings): Modifier {
  */
 @Composable
 private fun AnimatedVisibilityScope.liquidFlow(key: String, frames: Transition<Frame>, widths: HashMap<String, Int>, s: IslandSettings): Modifier {
+    val blurCache = remember { BlurEffectCache() }
     // «Другое» содержимое: для нового — прежнее, для уходящего — новое. Если на полпути направление
     // сменилось (раскрыли и тут же свернули), «другое» остаётся прежним — масштаб идёт дальше без скачка
     val target = frames.targetState.key
@@ -827,17 +955,26 @@ private fun AnimatedVisibilityScope.liquidFlow(key: String, frames: Transition<F
                 }
                 // Размытие сильное в начале и сходит к концу хода, а не тянется до последнего кадра
                 val rest = (1f - p).coerceAtLeast(0f)
-                blurLayer(blurDp * rest * sqrt(rest))
+                blurLayer(blurDp * rest * sqrt(rest), blurCache)
             }
         }
     }
 }
 
 /** Размытие слоя на [dp] — на Android 12+, где оно есть, и только когда заметно. */
-private fun GraphicsLayerScope.blurLayer(dp: Float) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dp > 0.3f) {
-        renderEffect = BlurEffect(dp.dp.toPx(), dp.dp.toPx(), TileMode.Decal)
+private class BlurEffectCache {
+    private val effects = object : LinkedHashMap<Int, BlurEffect>(48, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, BlurEffect>?) = size > 48
     }
+    fun effect(px: Float): BlurEffect {
+        val key = (px * 2f).toInt().coerceAtLeast(1)
+        return effects.getOrPut(key) { BlurEffect(key / 2f, key / 2f, TileMode.Decal) }
+    }
+}
+
+private fun GraphicsLayerScope.blurLayer(dp: Float, cache: BlurEffectCache) {
+    // Graphics layers retain their properties: explicitly clear a previous effect on the final frame.
+    renderEffect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dp > 0.3f) cache.effect(dp.dp.toPx()) else null
 }
 
 private fun onTap(context: Context, act: Act, expanded: Boolean, s: IslandSettings) {
@@ -845,13 +982,22 @@ private fun onTap(context: Context, act: Act, expanded: Boolean, s: IslandSettin
         Controls.collapse()
         return
     }
+    if (s.tapAction == TapAction.SCROLL_TOP) {
+        perform(context, s.tapAction, act)
+        return
+    }
     when (act) {
         is Act.NoticeA -> {
             // Пока вводят ответ, нажатие по карточке не должно открывать приложение
             if (IslandBus.reply.value != null) return
             // Нажатие на уведомление приложения открывает его, как на iPhone
-            act.n.message?.let { m ->
-                if (!Controls.send(context, m.intent)) Controls.openApp(context, m.pkg)
+            if (act.n.message != null) {
+                if (s.tapAction == TapAction.DISMISS_NOTIFICATION) {
+                    perform(context, s.tapAction, act)
+                    return
+                }
+                IslandBus.messageDetail.value = true
+                return
             }
             act.n.openPkg?.let { Controls.openApp(context, it) }
             act.n.alarm?.let { openAlarm(context, it) }
@@ -872,6 +1018,26 @@ private fun onTap(context: Context, act: Act, expanded: Boolean, s: IslandSettin
 }
 
 private fun perform(context: Context, action: TapAction, act: Act) {
+    if (action == TapAction.SCROLL_TOP) {
+        Controls.scrollToTop()
+        return
+    }
+    if (act is Act.NoticeA && act.n.message != null) {
+        if (IslandBus.locked.value) return
+        val message = act.n.message
+        when (action) {
+            TapAction.OPEN_APP -> {
+                if (!Controls.send(context, message.intent)) Controls.openApp(context, message.pkg)
+                IslandBus.notice.value = null
+            }
+            TapAction.DISMISS_NOTIFICATION -> {
+                if (!com.akira.island.service.NotifListener.dismiss(message.key)) android.widget.Toast.makeText(context,
+                    tr("Не удалось удалить уведомление", "Couldn't dismiss notification"), android.widget.Toast.LENGTH_SHORT).show()
+            }
+            else -> Unit
+        }
+        return
+    }
     if (act.transient) return
     val hasMedia = IslandBus.media.value != null
     when (action) {
@@ -880,36 +1046,40 @@ private fun perform(context: Context, action: TapAction, act: Act) {
         TapAction.PLAY_PAUSE -> if (hasMedia) Controls.playPause() else Controls.expand(act.id)
         TapAction.NEXT_TRACK -> if (hasMedia) Controls.next() else Controls.expand(act.id)
         TapAction.SCREENSHOT -> Controls.screenshot()
+        TapAction.SCROLL_TOP -> Unit // Handled above, including the idle island and transient cards.
         TapAction.NOTHING -> Unit
+        TapAction.DISMISS_NOTIFICATION -> Unit
     }
 }
 
 /** Вторая активность — круглый пузырь справа от острова. */
+private fun Act.surfaceAccent(): Color? = when (this) {
+    is Act.MediaA -> m.accent
+    is Act.NoticeA -> n.message?.accent ?: n.tint
+    is Act.ChargingA, is Act.CallA -> Tints.Green
+    is Act.TimerA, is Act.StopwatchA, is Act.ChronoA -> Tints.Orange
+    is Act.TorchA -> Tints.Yellow
+    is Act.ProgressA, is Act.HotspotA -> Tints.Blue
+    is Act.LiveA -> liveTint(l.kind)
+    else -> null
+}
+
 @Composable
 private fun Bubble(act: Act, s: IslandSettings) {
+    IslandTextTheme(s) { BubbleContent(act, s) }
+}
+
+@Composable
+private fun BubbleContent(act: Act, s: IslandSettings) {
     val h = activeHeight(s)
     val haptic = rememberHaptic()
+    val tilt = IslandBus.glassTilt.collectAsState()
+    val previewTilt = LocalGlassTilt.current
     val now = rememberNow(500, active = act is Act.TimerA)
-    val darkWallpaper by WallpaperTone.dark.collectAsState()
-    val darkScreen by ScreenTone.dark.collectAsState()
-    val autoOutline = !s.outline && when {
-        s.autoOutlineOnScreen -> darkScreen
-        s.autoOutlineOnDark -> darkWallpaper
-        else -> false
-    }
     Box(
         Modifier
             .size(h)
-            .then(if (s.shadow && !s.reduceEffects) Modifier.shadow(8.dp, CircleShape) else Modifier)
-            .clip(CircleShape)
-            .background(Color(s.color))
-            .then(
-                when {
-                    s.outline -> Modifier.border(s.outlineWidth.dp, Color(s.outlineColor), CircleShape)
-                    autoOutline -> Modifier.border(1.dp, Tints.AutoOutline, CircleShape)
-                    else -> Modifier
-                },
-            )
+            .islandSurface(s, false, CircleShape, act.surfaceAccent(), tilt = { previewTilt ?: tilt.value })
             .clickable {
                 haptic()
                 Controls.expand(act.id)
@@ -928,9 +1098,11 @@ private fun Bubble(act: Act, s: IslandSettings) {
                 )
                 Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.5f))
             }
-            is Act.StopwatchA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
+            is Act.StopwatchA -> Icon(Ios.stopwatch, null, tint = Tints.Orange, modifier = Modifier.size(inner * 0.8f))
+            is Act.AlarmA -> Icon(Ios.alarm, tr("Будильник", "Alarm"), tint = AlarmTint, modifier = Modifier.size(inner * 0.8f))
             is Act.TorchA -> Icon(Ios.flashlight, null, tint = Tints.Yellow, modifier = Modifier.size(inner * 0.75f))
-            is Act.ChronoA -> Icon(Ios.timer, null, tint = Tints.Orange, modifier = Modifier.size(inner))
+            is Act.ChronoA -> AppIcon(act.c.icon, inner, act.c.recordingKind?.icon ?: Ios.timer,
+                if (act.c.recording) Tints.Red else Tints.Orange)
             is Act.ProgressA -> {
                 ProgressRing(act.p.fraction, Tints.Blue, Modifier.size(inner), stroke = 2.5.dp)
                 Icon(Ios.download, null, tint = Tints.Blue, modifier = Modifier.size(inner * 0.5f))
@@ -938,10 +1110,10 @@ private fun Bubble(act: Act, s: IslandSettings) {
             is Act.CallA -> Icon(Ios.call, null, tint = Tints.Green, modifier = Modifier.size(inner * 0.7f))
             is Act.LiveA -> LiveGlyph(act.l, inner, liveTint(act.l.kind))
             is Act.ChargingA -> Icon(Ios.flash, null, tint = Tints.Green, modifier = Modifier.size(inner * 0.7f))
-            is Act.HotspotA -> Icon(
-                androidx.compose.material.icons.Icons.Rounded.WifiTethering, null,
-                tint = Tints.Blue, modifier = Modifier.size(inner * 0.7f),
-            )
+            is Act.WeatherA -> Icon(Icons.Rounded.WbSunny, null, tint = Tints.Yellow, modifier = Modifier.size(inner))
+            is Act.HotspotA -> Icon(androidx.compose.material.icons.Icons.Rounded.WifiTethering,
+                tr("Точка доступа", "Hotspot"), tint = Tints.Blue, modifier = Modifier.size(inner))
+            is Act.InboxA -> AppIcon(act.items.last().appIcon, inner, Ios.chatbubble, Tints.Blue)
             else -> Unit
         }
     }
@@ -987,13 +1159,41 @@ fun DrawScope.drawIslandRect(
 ) = islandOutline(topLeft, size, corner, notch) { drawOutline(it, brush, alpha, style) }
 
 /** Форма острова: капсула со скруглениями или, у «Как вырез», прямой верх у края экрана. */
-fun islandShape(corner: Dp, s: IslandSettings): RoundedCornerShape = islandShape(corner, s.notch)
+fun islandShape(corner: Dp, s: IslandSettings): RoundedCornerShape =
+    if (s.notch) RoundedCornerShape(s.notchTopRadius.dp, s.notchTopRadius.dp, corner, corner) else RoundedCornerShape(corner)
 
 fun islandShape(corner: Dp, notch: Boolean): RoundedCornerShape =
     if (notch) RoundedCornerShape(0.dp, 0.dp, corner, corner) else RoundedCornerShape(corner)
 
 /** Форма острова со скруглением из анимации: рамка и стекло читают его при рисовании и обновляются без пересборки. */
-private class AnimatedIslandShape(private val corner: State<Dp>, private val notch: Boolean) : Shape {
+private class AnimatedIslandShape(private val corner: State<Dp>, private val notch: Boolean, private val topRadius: Int) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
-        islandShape(corner.value, notch).createOutline(size, layoutDirection, density)
+        (if (notch) RoundedCornerShape(topRadius.dp, topRadius.dp, corner.value, corner.value) else RoundedCornerShape(corner.value))
+            .createOutline(size, layoutDirection, density)
+}
+
+/** Заливка острова: цвет из «Цвета капсулы» с непрозрачностью из «Оформления». */
+fun islandFill(s: IslandSettings): Color = Color(s.color).let { it.copy(alpha = it.alpha * s.islandOpacity.coerceIn(10, 100) / 100f) }
+
+/**
+ * Ширина раскрытого острова и широких плашек: почти во всю ширину экрана, уже — по «Ширине раскрытого острова»,
+ * но не уже капсулы и не шире экрана.
+ */
+fun expandedWidth(screen: Dp, s: IslandSettings): Dp {
+    val full = (screen - 22.dp).coerceAtMost(460.dp)
+    return (full * (s.expandedWidthPercent.coerceIn(60, 100) / 100f)).coerceAtLeast((s.width.dp + 60.dp).coerceAtMost(full))
+}
+
+
+private val LocalActivities = staticCompositionLocalOf<List<Act>> { emptyList() }
+
+/** Stable aggregate: notification update times must not switch between downloads every second. */
+internal fun groupedProgress(items: List<com.akira.island.core.ProgressInfo>): com.akira.island.core.ProgressInfo? {
+    if (items.isEmpty()) return null
+    val first = items.minWithOrNull(compareBy<com.akira.island.core.ProgressInfo> { it.postTime }.thenBy { it.key })!!
+    if (items.size == 1) return first
+    val unknown = items.any { it.indeterminate || it.max <= 0 }
+    return first.copy(key = "downloads", title = trf("Загрузок: {0}", "Downloads: {0}", items.size),
+        progress = (items.sumOf { it.fraction.toDouble() } / items.size * 1000).toInt(), max = 1000,
+        indeterminate = unknown, transferDetails = null)
 }

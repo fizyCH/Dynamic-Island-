@@ -1,7 +1,6 @@
 package com.akira.island.service
 
 import android.accessibilityservice.AccessibilityService
-import android.app.Notification
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
@@ -9,17 +8,16 @@ import android.os.SystemClock
 import android.provider.AlarmClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.RemoteViews
 import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
 import com.akira.island.core.IslandBus
-import com.akira.island.core.tr
+import com.akira.island.core.trf
 import com.akira.island.data.SettingsRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.math.abs
@@ -43,84 +41,18 @@ object ClockApps {
         context.packageManager.queryIntentActivities(Intent(AlarmClock.ACTION_SET_TIMER), 0).map { it.activityInfo.packageName }
     }.getOrDefault(emptyList()) - context.packageName).also { found = it }
 
-    fun isClock(context: Context, pkg: String) =
-        pkg in packages(context) || pkg.contains("clock", ignoreCase = true)
+    fun isClock(context: Context, pkg: String) = pkg in packages(context)
 
     private var alarmApps: Set<String>? = null
 
     /** «Часы» и будильники (Alarmy, Sleep as Android…) — те, кто ставит будильники или показывает их список */
-    fun isAlarmApp(context: Context, pkg: String): Boolean =
-        pkg in (alarmApps ?: (packages(context) +
-            listOf(AlarmClock.ACTION_SET_ALARM, AlarmClock.ACTION_SHOW_ALARMS).flatMap { action ->
-                runCatching {
-                    @Suppress("DEPRECATION")
-                    context.packageManager.queryIntentActivities(Intent(action), 0).map { it.activityInfo.packageName }
-                }.getOrDefault(emptyList())
-            }).also { alarmApps = it }) ||
-            pkg.contains("clock", ignoreCase = true) || pkg.contains("alarm", ignoreCase = true)
-}
-
-/**
- * Таймер и секундомер из уведомления «Часов». Google Часы и AOSP рисуют время не стандартным
- * chronometer-extra, а своим RemoteViews: в нём лежат обычные действия setBase/setStarted/setCountDown.
- * Достаём их оттуда, чтобы таймер был виден, даже если «Часы» не открыты на экране.
- */
-object ClockRemote {
-    data class Parsed(val base: Long, val countDown: Boolean, val running: Boolean) {
-        /** Сколько осталось/прошло, если таймер или секундомер стоит на паузе. */
-        fun pausedMs(now: Long): Long? = if (running) null else when {
-            countDown -> (base - now).coerceAtLeast(0)
-            else -> (now - base).coerceAtLeast(0)
-        }
-    }
-
-    fun parse(n: Notification): Parsed? {
-        val views = listOfNotNull(n.contentView, n.bigContentView, n.headsUpContentView)
-        for (rv in views) {
-            val parsed = parse(rv) ?: continue
-            return parsed
-        }
-        return null
-    }
-
-    private fun parse(rv: RemoteViews): Parsed? {
-        val actions = field(rv, "mActions", "actions") as? List<*> ?: return null
-        val chrono = HashMap<Int, Holder>()
-        for (action in actions) {
-            val a = action ?: continue
-            val id = field(a, "mViewId", "viewId") as? Int ?: continue
-            val method = field(a, "mMethodName", "methodName") as? String ?: continue
-            val value = field(a, "mValue", "value")
-            val h = chrono.getOrPut(id) { Holder() }
-            when (method) {
-                "setBase" -> if (value is Long) h.base = value
-                "setStarted" -> if (value is Boolean) h.started = value
-                "setCountDown" -> if (value is Boolean) h.countDown = value
-            }
-        }
-        val h = chrono.values.firstOrNull { it.base != null } ?: return null
-        val base = h.base ?: return null
-        val elapsedNow = SystemClock.elapsedRealtime()
-        return Parsed(
-            base = System.currentTimeMillis() + (base - elapsedNow),
-            countDown = h.countDown ?: false,
-            running = h.started ?: true,
-        )
-    }
-
-    private class Holder(var base: Long? = null, var countDown: Boolean? = null, var started: Boolean? = null)
-
-    private fun field(obj: Any, vararg names: String): Any? {
-        var c: Class<*>? = obj.javaClass
-        while (c != null) {
-            for (name in names) {
-                val f = runCatching { c.getDeclaredField(name).apply { isAccessible = true } }.getOrNull() ?: continue
-                return runCatching { f.get(obj) }.getOrNull()
-            }
-            c = c.superclass
-        }
-        return null
-    }
+    fun isAlarmApp(context: Context, pkg: String): Boolean = pkg in (alarmApps ?: (packages(context) +
+        listOf(AlarmClock.ACTION_SET_ALARM, AlarmClock.ACTION_SHOW_ALARMS).flatMap { action ->
+            runCatching {
+                @Suppress("DEPRECATION")
+                context.packageManager.queryIntentActivities(Intent(action), 0).map { it.activityInfo.packageName }
+            }.getOrDefault(emptyList())
+        }).also { alarmApps = it })
 }
 
 /** Что делает кнопка «Часов». */
@@ -140,7 +72,7 @@ object ClockWords {
         ClockAction.START to listOf("Старт", "Начать", "Продолжить", "Пуск", "Возобновить", "Start", "Resume"),
         ClockAction.PAUSE to listOf("Пауза", "Стоп", "Pause", "Stop"),
         ClockAction.RESET to listOf("Сбросить", "Сброс", "Удалить", "Reset", "Delete"),
-        ClockAction.LAP to listOf("Флажок", "Круг", "Отметка", "Lap", "Flag", "Split"),
+        ClockAction.LAP to listOf("Флажок", "Круг", "Отметка", "Количество", "Lap", "Flag", "Split", "Count"),
     )
 
     /** По началу слова; «стоп» — только целым словом, иначе совпадёт «Stopwatch». */
@@ -241,7 +173,6 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
     private var stopwatch: Track? = null
     private var timerMisses = 0
     private var stopwatchMisses = 0
-    /** Сколько кругов/флажков показывает секундомер «Часов» */
     private var lapCount = 0
     private val labels = HashMap<String, String>()
 
@@ -274,12 +205,7 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         current = pkg
         openedAt = SystemClock.elapsedRealtime()
         loop = scope.launch {
-            while (isActive) {
-                // Экран погашен — читать нечего, спим, пока его не включат
-                if (!IslandBus.screenOn.value) IslandBus.screenOn.first { it }
-                if (SettingsRepo.current.cardTimer) runCatching { tick() }
-                delay(250)
-            }
+            visiblePolling(IslandBus.screenOn, SettingsRepo.state.map { it.cardTimer }.distinctUntilChanged(), 250, { tick() })
         }
     }
 
@@ -757,14 +683,14 @@ class ClockScreenReader(private val service: AccessibilityService, private val s
         val w = stopwatch?.takeUnless { fromNotification }
         if (t != null) {
             val old = map[TIMER_KEY]
-            map[TIMER_KEY] = ChronoInfo(TIMER_KEY, pkg, tr("Таймер · $label", "Timer · $label"), icon, t.base, true,
+            map[TIMER_KEY] = ChronoInfo(TIMER_KEY, pkg, trf("Таймер · {0}", "Timer · {0}", label), icon, t.base, true,
                 old?.postTime ?: System.currentTimeMillis(), pausedMs = t.pausedMs)
         } else {
             map.remove(TIMER_KEY)
         }
         if (w != null) {
             val old = map[STOPWATCH_KEY]
-            map[STOPWATCH_KEY] = ChronoInfo(STOPWATCH_KEY, pkg, tr("Секундомер · $label", "Stopwatch · $label"), icon, w.base, false,
+            map[STOPWATCH_KEY] = ChronoInfo(STOPWATCH_KEY, pkg, trf("Секундомер · {0}", "Stopwatch · {0}", label), icon, w.base, false,
                 old?.postTime ?: System.currentTimeMillis(), pausedMs = w.pausedMs, flags = lapCount)
         } else {
             map.remove(STOPWATCH_KEY)
@@ -858,11 +784,10 @@ object ClockControl {
             ClockAction.PAUSE -> c.copy(pausedMs = value)
             ClockAction.START -> c.copy(pausedMs = null, base = if (c.countDown) now + value else now - value)
             ClockAction.RESET -> null
-            // «Количество» в уведомлении «Часов» ставит новый круг — сразу показываем счётчик,
-            // не дожидаясь, пока «Часы» перерисуют уведомление.
             ClockAction.LAP -> c.copy(flags = c.flags + 1)
         }
         IslandBus.chrono.value = if (next == null) IslandBus.chrono.value - c.key else IslandBus.chrono.value + (c.key to next)
+        if (next?.pausedMs != null) dropPausedLater(c.key)
     }
 
     /** Уведомления «Часов» на паузе, которые остров уже убрал: ключ → застывшее время */

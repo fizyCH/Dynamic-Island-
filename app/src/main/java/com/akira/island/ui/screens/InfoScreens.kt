@@ -22,8 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CreditCard
-import androidx.compose.material.icons.rounded.ForkRight
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.NewReleases
@@ -37,7 +37,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,8 +51,10 @@ import androidx.compose.ui.unit.sp
 import com.akira.island.R
 import com.akira.island.core.Tints
 import com.akira.island.core.tr
+import com.akira.island.core.trf
 import com.akira.island.data.SettingsRepo
 import com.akira.island.service.LiveDebug
+import com.akira.island.service.NotifDebug
 import com.akira.island.service.PayDebug
 import com.akira.island.ui.Group
 import com.akira.island.ui.GroupItem
@@ -66,11 +67,12 @@ import com.akira.island.ui.Pos
 import com.akira.island.ui.Screen
 import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
+import com.akira.island.ui.Ui
 import com.akira.island.ui.UpdateSection
 import com.akira.island.ui.updateStatusText
-import com.akira.island.ui.Ui
 import com.akira.island.update.UpdateChecker
 import com.akira.island.update.UpdateState
+import kotlinx.coroutines.launch
 
 @Composable
 fun InstructionScreen(onBack: () -> Unit) {
@@ -170,7 +172,6 @@ private fun Step(n: Int, title: String, text: String) {
 }
 
 private val GithubPurple = Color(0xFF8250DF)
-private const val FORK_URL = "https://github.com/fizyCH/Dynamic-Island-"
 
 /** Главная страница проекта на GitHub — в браузере или приложении GitHub. */
 private fun openGithub(context: Context) {
@@ -178,12 +179,6 @@ private fun openGithub(context: Context) {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${UpdateChecker.REPO}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
-    }
-}
-
-private fun openUrl(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
@@ -198,18 +193,23 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
     var notes by remember { mutableStateOf(false) }
 
     Page(tr("О приложении", "About")) {
-        AppHeader(version)
+        AppHeader(version, update)
         UpdateSection()
 
         SectionHeader(tr("Обновления", "Updates"))
         Group {
             GroupToggle(Pos.First, Icons.Rounded.SystemUpdate, tr("Искать обновления", "Check for updates"),
-                tr("Раз в 3 часа проверять релизы форка на GitHub", "Check the fork's GitHub releases every 3 hours"),
+                tr("Раз в 3 часа смотреть на GitHub, не вышла ли новая версия", "Look on GitHub every 3 hours for a new version"),
                 s.autoUpdateCheck, color = Tile.Green) { v ->
                 SettingsRepo.update { copy(autoUpdateCheck = v) }
             }
-            GroupItem(Pos.Last, Icons.Rounded.Refresh, tr("Проверить сейчас", "Check now"), updateStatusText(update, version),
+            GroupItem(Pos.Middle, Icons.Rounded.Refresh, tr("Проверить сейчас", "Check now"), updateStatusText(update, version),
                 onClick = { scope.launch { UpdateChecker.check(context.applicationContext, force = true) } }, color = Tile.Blue)
+            GroupItem(Pos.Last, Icons.Rounded.NewReleases, tr("Что нового", "What's new"), trf(
+                "Изменения в версии {0}",
+                "Changes in version {0}", version,
+            ),
+                onClick = { notes = true }, color = Tile.Purple) { Arrow() }
         }
 
         SectionHeader(tr("Помощь", "Help"))
@@ -217,9 +217,6 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
             GroupItem(Pos.First, Icons.Rounded.Lightbulb, tr("Инструкция", "Instructions"),
                 tr("Как включить остров на Android 13+", "How to turn the island on with Android 13+"),
                 onClick = { open(Screen.INSTRUCTION) }, color = Tile.Yellow) { Arrow() }
-            GroupItem(Pos.Middle, Icons.Rounded.NewReleases, tr("Что нового", "What's new"),
-                tr("Изменения в версии $version", "Changes in version $version"),
-                onClick = { notes = true }, color = Tile.Purple) { Arrow() }
             KeepAliveItem(Pos.Middle, open)
             GroupItem(Pos.Middle, Icons.Rounded.Navigation, tr("Диагностика навигации", "Navigation diagnostics"),
                 tr("Что присылает навигатор, такси или доставка — если не видно расстояния",
@@ -231,14 +228,18 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
             AppDetailsItem(Pos.Last)
         }
 
+        SectionHeader(tr("Значок приложения", "App icon"))
+        GroupItem(Pos.Single, Icons.Rounded.Apps, tr("Значок на рабочем столе", "Launcher icon"),
+            tr("Скрыть только после проверки входа через плитку", "Hide only after testing access through the tile"),
+            onClick = { open(Screen.LAUNCHER) }, color = Tile.Purple) { Arrow() }
+
+        SupportAuthorItem { open(Screen.SUPPORT) }
+
         SectionHeader(tr("Проект", "Project"))
         Group {
             GroupItem(Pos.First, ImageVector.vectorResource(R.drawable.ic_github), tr("Страница GitHub", "GitHub page"),
-                tr("Описание и исходный код", "Description and source code"),
+                tr("Описание, новые версии и исходный код", "Description, new versions and source code"),
                 onClick = { openGithub(context) }, color = GithubPurple) { Arrow() }
-            GroupItem(Pos.Middle, Icons.Rounded.ForkRight, tr("Форк проекта", "Project fork"),
-                tr("Версия с добавленными функциями островка", "Version with the added island features"),
-                onClick = { openUrl(context, FORK_URL) }, color = Tile.Purple) { Arrow() }
             GroupItem(Pos.Last, Icons.Rounded.Info, tr("Об острове", "About the island"),
                 tr("Что умеет и откуда идея", "What it does and where the idea comes from"),
                 onClick = { open(Screen.ABOUT) }, color = Tile.Indigo) { Arrow() }
@@ -250,7 +251,7 @@ fun AppInfoScreen(open: (Screen) -> Unit) {
 
 /** Шапка «О приложении»: значок, название, версия и есть ли обновление. */
 @Composable
-private fun AppHeader(version: String) {
+private fun AppHeader(version: String, update: UpdateState) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Ui.Card).padding(vertical = 26.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -261,7 +262,21 @@ private fun AppHeader(version: String) {
         }
         Spacer(Modifier.height(14.dp))
         Text(tr("Динамический остров", "Dynamic Island"), color = Ui.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text(tr("Версия $version", "Version $version"), color = Ui.Sub, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
+        Text(trf("Версия {0}", "Version {0}", version), color = Ui.Sub, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
+        val (label, color) = when (update) {
+            UpdateState.UpToDate -> tr("Последняя версия", "Up to date") to Tints.Green
+            is UpdateState.Available -> trf("Доступна версия {0}", "Version {0} is available", update.release.version) to Ui.Primary
+            UpdateState.Checking -> tr("Проверяю обновления…", "Checking for updates…") to Ui.Sub
+            is UpdateState.Error -> tr("Не удалось проверить обновления", "Couldn't check for updates") to Tints.Orange
+            UpdateState.Idle -> null to Ui.Sub
+        }
+        if (label != null) {
+            Text(
+                label, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 12.dp).clip(CircleShape).background(color.copy(alpha = 0.14f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+            )
+        }
     }
 }
 
@@ -356,6 +371,23 @@ fun PayDiagScreen(onBack: () -> Unit) {
         ),
         tr("Пока ничего нет: остров не видел ни экрана оплаты, ни уведомлений банков.",
             "Nothing yet: the island hasn't seen a payment screen or a bank notification."),
+        log, onBack,
+    )
+}
+
+/** «Почему не показано»: что остров решил о последних уведомлениях — только приложение и причина. */
+@Composable
+fun NotifDiagScreen(onBack: () -> Unit) {
+    val log by NotifDebug.log.collectAsState()
+    DumpScreen(
+        tr("Почему не показано", "Why it didn't show"),
+        tr(
+            "Пусть придёт уведомление, которого не было в острове, и вернитесь сюда: ниже — что остров решил о последних " +
+                "уведомлениях. Только название приложения и причина, без текста сообщений; записи пропадают после перезапуска.",
+            "Let a notification that didn't show in the island arrive, then come back here: below is what the island decided " +
+                "about recent notifications. Only the app name and the reason, no message text; entries are gone after a restart.",
+        ),
+        tr("Пока ничего нет: уведомлений приложений не приходило.", "Nothing yet: no app notifications have arrived."),
         log, onBack,
     )
 }

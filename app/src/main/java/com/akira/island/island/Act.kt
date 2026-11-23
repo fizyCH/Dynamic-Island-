@@ -1,10 +1,10 @@
 package com.akira.island.island
 
 import com.akira.island.core.AlarmInfo
+import com.akira.island.core.InboxItem
 import com.akira.island.core.BatteryInfo
 import com.akira.island.core.CallInfo
 import com.akira.island.core.ChronoInfo
-import com.akira.island.core.HotspotInfo
 import com.akira.island.core.LiveInfo
 import com.akira.island.core.MediaInfo
 import com.akira.island.core.Notice
@@ -19,6 +19,8 @@ sealed class Act(val id: String, val transient: Boolean = false) {
     open val pkg: String? get() = null
 
     data object Idle : Act("idle")
+    data class HotspotA(val status: com.akira.island.service.HotspotStatus) : Act("hotspot")
+    data class WeatherA(val weather: com.akira.island.service.WeatherInfo) : Act("weather")
     data class NoticeA(val n: Notice) : Act("notice", transient = true)
     data class TimerA(val t: TimerState) : Act("timer")
     data class StopwatchA(val w: StopwatchState) : Act("stopwatch")
@@ -39,7 +41,6 @@ sealed class Act(val id: String, val transient: Boolean = false) {
         override val pkg: String get() = l.pkg
     }
     data class ChargingA(val b: BatteryInfo) : Act("charging")
-    data class HotspotA(val h: HotspotInfo) : Act("hotspot")
     /** Оплата телефоном: ждём терминал. Не раскрывается и не уходит в пузырь */
     data class PayA(val p: PayReady) : Act("pay", transient = true) {
         override val pkg: String get() = p.pkg
@@ -47,4 +48,6 @@ sealed class Act(val id: String, val transient: Boolean = false) {
     data class AlarmA(val a: AlarmInfo) : Act("alarm") {
         override val pkg: String? get() = a.pkg
     }
+    /** «История уведомлений»: прочитать позже — значки приложений в капсуле, список при раскрытии */
+    data class InboxA(val items: List<InboxItem>) : Act("inbox")
 }

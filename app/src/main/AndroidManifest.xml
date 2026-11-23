@@ -3,7 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Optional face-only mode: granted explicitly through Shizuku, not at startup. -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false" />
+    <!-- Optional brightness slider; user grants special access in system settings. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
     <!-- Таймер острова будит телефон к своему окончанию, даже если экран погашен -->
     <uses-permission
@@ -28,6 +35,9 @@
     <!-- «Не выгружать остров»: служба на переднем плане, чтобы остров не закрывался вместе с недавними -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Кнопки «Режим звука» и «Не беспокоить» в раскрытом острове -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!-- Обновление из приложения: скачанный APK открывает системная установка -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -61,22 +71,53 @@
 
     <application
         android:name=".IslandApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Island">
 
+        <provider
+            android:name=".face.FaceShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:taskAffinity=""
             android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.SystemAlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Island" />
+
+        <!-- Hide only this alias. MainActivity remains enabled for the tile and Android settings. -->
+        <activity-alias
+            android:name=".Launcher"
+            android:enabled="true"
+            android:exported="true"
+            android:targetActivity=".ui.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
         <!-- «Поставь таймер» от помощника или виджета: если выбрать остров, таймер сразу в нём.
          Как у «Часов» Android: позвать его могут только приложения с правом ставить будильники и таймеры -->

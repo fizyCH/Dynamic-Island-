@@ -10,17 +10,27 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import android.provider.Settings
+import com.akira.island.core.IslandBus
 import com.akira.island.R
 import com.akira.island.core.tr
 import com.akira.island.data.SettingsRepo
+import com.akira.island.data.LauncherVisibility
 import com.akira.island.ui.Perms
 
 /**
  * «Не выгружать остров»: служба на переднем плане с тихим уведомлением. Процесс с такой службой Android
  * не закрывает вместе с приложением, когда его смахивают из недавних, — остров остаётся на экране.
- * Сама служба ничего не делает и заряд не тратит: она только показывает системе, что остров нужен.
+ * Поддерживает foreground-уведомление и проверяет подключение слушателя только при включённом экране.
  */
 class KeepAliveService : Service() {
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+    private var maintenance: kotlinx.coroutines.Job? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -34,11 +44,27 @@ class KeepAliveService : Service() {
                 startForeground(ID, notification())
             }
         }.isSuccess
-        if (!shown || !SettingsRepo.current.keepAlive) {
+        if (!shown || !SettingsRepo.current.keepAlive || !SettingsRepo.current.enabled) {
             stopSelf()
             return START_NOT_STICKY
         }
+        maintenance?.cancel()
+        maintenance = scope.launch {
+            IslandBus.screenOn.collectLatest { screenOn ->
+                if (screenOn) while (SettingsRepo.current.keepAlive && SettingsRepo.current.enabled) {
+                    if (Perms.notifications(this@KeepAliveService) && !NotifListener.isConnected) {
+                        NotifListener.requestReconnect(this@KeepAliveService)
+                    }
+                    delay(60_000)
+                }
+            }
+        }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     private fun notification(): Notification {
@@ -50,13 +76,16 @@ class KeepAliveService : Service() {
             },
         )
         // Нажатие открывает настройки острова
-        val open = packageManager.getLaunchIntentForPackage(packageName)
-            ?.let { PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE) }
+        val open = PendingIntent.getActivity(this, 0, LauncherVisibility.settingsIntent(this), PendingIntent.FLAG_IMMUTABLE)
+        val restore = PendingIntent.getActivity(this, 1,
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_tab_island)
             .setContentTitle(tr("Остров работает", "The island is running"))
             .setContentText(tr("Уведомление не даёт системе закрыть остров", "This notification keeps the system from closing the island"))
             .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null,
+                tr("Восстановить остров", "Restore island"), restore).build())
             .setOngoing(true)
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
@@ -73,7 +102,7 @@ class KeepAliveService : Service() {
          */
         fun sync(context: Context) {
             val intent = Intent(context, KeepAliveService::class.java)
-            if (SettingsRepo.current.keepAlive && Perms.accessibility(context)) {
+            if (SettingsRepo.current.keepAlive && SettingsRepo.current.enabled && Perms.accessibility(context)) {
                 runCatching { context.startForegroundService(intent) }
             } else {
                 context.stopService(intent)

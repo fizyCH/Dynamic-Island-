@@ -1,125 +1,240 @@
-@file:OptIn(ExperimentalLayoutApi::class)
-
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.akira.island.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BorderStyle
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Layers
-import androidx.compose.material.icons.rounded.LineWeight
-import androidx.compose.material.icons.rounded.Screenshot
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akira.island.core.tr
-import com.akira.island.data.SettingsRepo
-import com.akira.island.ui.Group
-import com.akira.island.ui.GroupSlider
-import com.akira.island.ui.GroupToggle
-import com.akira.island.ui.Page
-import com.akira.island.ui.Pos
-import com.akira.island.ui.SectionHeader
-import com.akira.island.ui.Tile
-import com.akira.island.ui.Ui
+import com.akira.island.data.*
+import com.akira.island.island.PreviewScene
+import com.akira.island.ui.*
 
-private val capsuleColors = listOf(
-    0xFF000000, 0xFF111114, 0xFF1C1C22, 0xFF26233A, 0xFF1A2238, 0xFF102A2A,
-    0xFF2B1730, 0xFF3A1A1A, 0xFF2E2A1A, 0xFF3D3D45, 0xFFF2F2F7, 0xFFC6C3F7,
-)
-
-private val outlineColors = listOf(
-    0xFF3A3A40, 0xFF8E8E93, 0xFFFFFFFF, 0xFFC6C3F7, 0xFF0A84FF, 0xFF64D2FF,
-    0xFF34C759, 0xFFFFD60A, 0xFFFF9F0A, 0xFFFF453A, 0xFFFF2D92, 0xFFBF5AF2,
-)
+private val fillColors = listOf(0xFF000000, 0xFF111114, 0xFF1C1C22, 0xFF26233A, 0xFF1A2238, 0xFF102A2A,
+    0xFF2B1730, 0xFF3A1A1A, 0xFF2E2A1A, 0xFF3D3D45, 0xFFF2F2F7, 0xFFC6C3F7)
+private val lineColors = listOf(0xFF3A3A40, 0xFF8E8E93, 0xFFFFFFFF, 0xFFC6C3F7, 0xFF0A84FF, 0xFF64D2FF,
+    0xFF34C759, 0xFFFFD60A, 0xFFFF9F0A, 0xFFFF453A, 0xFFFF2D92, 0xFFBF5AF2)
 
 @Composable
 fun ColorsScreen(onBack: () -> Unit) {
     val s by SettingsRepo.state.collectAsState()
-    Page(tr("Цвет капсулы", "Capsule color"), onBack) {
-        IslandPreview()
+    val blurAvailable = rememberBackdropAvailability()
+    val blurRejected by com.akira.island.service.IslandBackdropBlur.windowRejected.collectAsState()
+    val islandRunning by com.akira.island.core.IslandBus.serviceRunning.collectAsState()
+    var card by rememberSaveable { mutableStateOf(false) }
+    var scene by rememberSaveable { mutableStateOf(PreviewScene.MUSIC) }
+    Page(tr("Цвет и рамка", "Color and border"), onBack, preview = {
+        SettingsPreview(card, scene, onScene = { scene = it })
+    }) {
+        ChoiceStrip(listOf(false, true), card, { if (it) tr("Карточка", "Card") else tr("Капсула", "Capsule") }) { card = it }
+        SettingsHint(if (card) tr("Карточка появляется при раскрытии острова и в уведомлениях.", "The card appears when the island expands and in notifications.")
+            else tr("Капсула — небольшой остров вокруг камеры.", "The capsule is the small island around the camera."))
 
-        SectionHeader(tr("Цвет", "Color"))
-        Swatches(capsuleColors, s.color) { c -> SettingsRepo.update { copy(color = c) } }
+        SectionHeader(tr("Цвет текста", "Text color"))
+        GroupToggle(Pos.Single, Icons.Rounded.FormatColorText, tr("Свой цвет текста", "Custom text color"),
+            tr("Основной текст капсулы, карточек и сводки", "Main text in the capsule, cards and Brief"),
+            s.textColorEnabled, color = Tile.Purple) { value -> SettingsRepo.update { copy(textColorEnabled = value) } }
+        if (s.textColorEnabled) {
+            Swatches(lineColors, s.textColor) { value -> SettingsRepo.update { copy(textColor = value) } }
+            var hex by rememberSaveable(s.textColor) { mutableStateOf("#%06X".format(s.textColor and 0xFFFFFF)) }
+            val valid = hex.removePrefix("#").let { it.length == 6 && it.all { digit -> digit in '0'..'9' || digit.lowercaseChar() in 'a'..'f' } }
+            OutlinedTextField(hex, { value ->
+                hex = value.take(7)
+                val raw = hex.removePrefix("#")
+                if (raw.length == 6) raw.toLongOrNull(16)?.let { rgb ->
+                    if (rgb in 0..0xFFFFFF) SettingsRepo.update { copy(textColor = 0xFF000000 or rgb) }
+                }
+            }, label = { Text("HEX · #RRGGBB") }, isError = hex.isNotEmpty() && !valid,
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+        }
+        SettingsHint(tr("Изменения сразу видны в примере сверху. Цвета статусов и кнопок сохраняются.",
+            "Changes appear immediately in the preview above. Status and button colors are preserved."))
 
-        SectionHeader(tr("Контур", "Outline"))
-        Group {
-            GroupToggle(Pos.First, Icons.Rounded.BorderStyle, tr("Контур", "Outline"),
-                tr("Тонкая обводка вокруг капсулы", "A thin line around the capsule"),
-                s.outline, color = Tile.Gray) { v ->
-                SettingsRepo.update { copy(outline = v) }
+        SectionHeader(tr("Заливка", "Fill"))
+        if (card) ChoiceStrip(listOf(false, true), s.expandedColorEnabled,
+            { if (it) tr("Свой цвет", "Custom color") else tr("Как у капсулы", "Same as capsule") }) {
+            SettingsRepo.update { copy(expandedColorEnabled = it) }
+        }
+        if (!card || s.expandedColorEnabled) Swatches(fillColors, if (card) s.expandedColor else s.color) { color ->
+            SettingsRepo.update { if (card) copy(expandedColor = color) else copy(color = color) }
+        } else SettingsHint(tr("Используется цвет капсулы. Чтобы изменить только карточку, выберите «Свой цвет».", "Uses the capsule color. Choose Custom color to change only the card."))
+
+        SectionHeader(tr("Рамка", "Border"))
+        ChoiceStrip(if (card) BorderMode.entries else listOf(BorderMode.NONE, BorderMode.CUSTOM), s.borderMode(card), {
+            when (it) {
+                BorderMode.INHERIT -> tr("Как у капсулы", "Same as capsule")
+                BorderMode.NONE -> tr("Без рамки", "No border")
+                BorderMode.CUSTOM -> tr("Своя рамка", "Custom border")
             }
-            GroupToggle(Pos.Middle, Icons.Rounded.Image, tr("Цвет из обложки", "Color from artwork"),
-                tr("Пока играет музыка, контур окрашивается в цвет обложки", "While music plays, the outline takes the artwork's color"),
-                s.outlineFromArt, color = Tile.Pink) { v -> SettingsRepo.update { copy(outlineFromArt = v, outline = outline || v) } }
-            GroupSlider(Pos.Last, Icons.Rounded.LineWeight, tr("Толщина", "Thickness"), s.outlineWidth, 0.5f..4f,
-                "%.1f dp".format(s.outlineWidth), color = Tile.Gray) { v ->
-                SettingsRepo.update { copy(outlineWidth = (v * 2).toInt() / 2f) }
+        }) { mode -> SettingsRepo.update { withBorderMode(card, mode) } }
+        if (s.borderMode(card) == BorderMode.INHERIT) SettingsHint(tr("Цвет, прозрачность и толщина рамки повторяют капсулу. Если у капсулы рамка выключена, у карточки её тоже нет.",
+            "Color, opacity and widths follow the capsule. If the capsule has no border, neither does the card."))
+        if (s.borderMode(card) == BorderMode.CUSTOM) {
+            if (!card) {
+                ChoiceStrip(listOf(false, true), s.outlineFromArt, { if (it) tr("Цвет активности", "Activity color") else tr("Свой цвет", "Custom color") }) {
+                    SettingsRepo.update { copy(outlineFromArt = it) }
+                }
+            }
+            if (card || !s.outlineFromArt) Swatches(lineColors, if (card) s.expandedOutlineColor else s.outlineColor) { color ->
+                SettingsRepo.update { if (card) copy(expandedOutlineColor = color) else copy(outlineColor = color) }
+            }
+            else SettingsHint(tr("В примере показан цвет выбранной активности; при музыке он берётся из обложки.", "The preview uses the selected activity color; music uses its artwork color."))
+            ChoiceStrip(BorderWidths.entries, s.borderWidths(card), { if (it == BorderWidths.UNIFORM) tr("Одинаковая толщина", "Uniform width") else tr("По сторонам", "Per edge") }) {
+                mode -> SettingsRepo.update { withBorderWidths(card, mode) }
+            }
+            if (s.borderWidths(card) == BorderWidths.UNIFORM) {
+                val value = if (card) s.expandedOutlineWidth else s.outlineWidth
+                GroupSlider(Pos.Single, Icons.Rounded.LineWeight, tr("Толщина рамки", "Border width"), value.coerceIn(0.5f, 6f), 0.5f..6f, "%.1f dp".format(value), color = Tile.Blue) {
+                    value -> SettingsRepo.update { if (card) copy(expandedOutlineWidth = half(value)) else copy(outlineWidth = half(value)) }
+                }
+            } else {
+                val edges = if (card) listOf(s.expandedOutlineTopWidth, s.expandedOutlineRightWidth, s.expandedOutlineBottomWidth, s.expandedOutlineLeftWidth)
+                    else listOf(s.outlineTopWidth, s.outlineRightWidth, s.outlineBottomWidth, s.outlineLeftWidth)
+                val labels = listOf(tr("Сверху", "Top"), tr("Справа", "Right"), tr("Снизу", "Bottom"), tr("Слева", "Left"))
+                val icons = listOf(Icons.Rounded.BorderTop, Icons.Rounded.BorderRight, Icons.Rounded.BorderBottom, Icons.Rounded.BorderLeft)
+                Group {
+                    edges.forEachIndexed { index, width ->
+                        val value = width.takeIf { it >= 0f } ?: if (card) s.expandedOutlineWidth else s.outlineWidth
+                        GroupSlider(posOf(index, 4), icons[index], labels[index], value, 0f..6f, "%.1f dp".format(value), color = Tile.Blue) { v ->
+                            SettingsRepo.update { edge(card, index, half(v)) }
+                        }
+                    }
+                }
+                SettingsHint(tr("Ноль скрывает выбранную сторону. Общий ползунок толщины в этом режиме не используется.", "Zero hides that edge. Uniform width is not used in this mode."))
+            }
+            GroupSlider(Pos.Single, Icons.Rounded.Opacity, tr("Непрозрачность рамки", "Border opacity"),
+                (if (card) s.expandedOutlineOpacity else s.outlineOpacity).toFloat(), 0f..100f,
+                "${if (card) s.expandedOutlineOpacity else s.outlineOpacity}%", color = Tile.Gray) { v ->
+                SettingsRepo.update { if (card) copy(expandedOutlineOpacity = v.toInt()) else copy(outlineOpacity = v.toInt()) }
             }
         }
-        Swatches(outlineColors, s.outlineColor) { c -> SettingsRepo.update { copy(outlineColor = c, outline = true) } }
 
-        SectionHeader(tr("Автоматическая обводка", "Automatic outline"))
-        Group {
-            GroupToggle(Pos.First, Icons.Rounded.Screenshot, tr("По цвету на экране", "By screen color"),
-                tr("Считывает фон вокруг острова: тёмный — серая обводка, светлый — без обводки",
-                    "Samples the background around the island: dark adds a gray line, light leaves it off"),
-                s.autoOutlineOnScreen, color = Tile.Teal) { v ->
-                SettingsRepo.update { copy(autoOutlineOnScreen = v, autoOutlineOnDark = if (v) false else autoOutlineOnDark) }
-            }
-            GroupToggle(Pos.Last, Icons.Rounded.DarkMode, tr("По тёмным обоям", "By dark wallpaper"),
-                tr("Резервный вариант, если чтение цвета экрана выключено",
-                    "Fallback when screen color sampling is off"),
-                s.autoOutlineOnDark, color = Tile.Gray) { v ->
-                SettingsRepo.update { copy(autoOutlineOnDark = v, autoOutlineOnScreen = if (v) false else autoOutlineOnScreen) }
-            }
+        SectionHeader(tr("Материал и эффекты", "Material and effects"))
+        SettingsHint(tr("Общие для капсулы и карточек. Пример сверху показывает выбранный вид.", "Shared by the capsule and cards. The preview above shows the selected appearance."))
+        ChoiceStrip(listOf(false, true), s.liquidGlass, { if (it) tr("Стекло", "Glass") else tr("Обычная заливка", "Plain fill") }) {
+            SettingsRepo.update { copy(liquidGlass = it) }
         }
-        Text(
-            tr("Цвет считывается только вокруг острова; снимок не сохраняется и никуда не отправляется.",
-                "Only the area around the island is sampled; the screenshot is not saved or sent anywhere."),
-            color = Ui.Sub, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(horizontal = 8.dp),
-        )
-
-        SectionHeader(tr("Тень", "Shadow"))
-        GroupToggle(Pos.Single, Icons.Rounded.Layers, tr("Тень", "Shadow"),
-            tr("Мягкая тень под капсулой — заметна на светлых экранах", "A soft shadow under the capsule — visible on light screens"),
-            s.shadow, color = Tile.Indigo) { v ->
-            SettingsRepo.update { copy(shadow = v) }
+        GroupSlider(Pos.Single, Icons.Rounded.Opacity, if (s.liquidGlass) tr("Плотность стекла", "Glass density") else tr("Непрозрачность заливки", "Fill opacity"),
+            (if (s.liquidGlass) s.glassOpacity else s.islandOpacity).toFloat(), if (s.liquidGlass) 40f..100f else 20f..100f,
+            "${if (s.liquidGlass) s.glassOpacity else s.islandOpacity}%", color = Tile.Teal) { v ->
+            SettingsRepo.update { if (liquidGlass) copy(glassOpacity = v.toInt()) else copy(islandOpacity = v.toInt()) }
+        }
+        if (s.liquidGlass) {
+            Box(Modifier.testTag("glass-blur-strength")) {
+                GroupSlider(Pos.Single, Icons.Rounded.BlurOn, tr("Сила размытия", "Blur strength"),
+                    s.glassBlurStrength.coerceIn(0,100).toFloat(),0f..100f,"${s.glassBlurStrength.coerceIn(0,100)}%",color=Tile.Teal) { value ->
+                    SettingsRepo.update { copy(glassBlurStrength=value.toInt().coerceIn(0,100)) }
+                }
+            }
+            SettingsHint(tr("0% — без размытия, 50% — стандартное, 100% — сильное. Меняется фон, текст и кнопки остаются чёткими.",
+                "0%: no blur, 50%: standard, 100%: strong. Only the background changes; text and buttons stay sharp."))
+            BlurStrengthPreview(s.glassBlurStrength,blurAvailable && !s.reduceEffects)
+        }
+        GroupSlider(Pos.Single, Icons.Rounded.Gradient, tr("Затемнение снизу", "Bottom shading"), s.bottomGradient.toFloat(), 0f..80f, "${s.bottomGradient}%", color = Tile.Indigo) {
+            v -> SettingsRepo.update { copy(bottomGradient = v.toInt()) }
+        }
+        SettingsHint(tr("Затемнение видно на светлой заливке. На чёрном цвете разницы не будет.", "Bottom shading is visible on light fills. It has no visible effect on black."))
+        if (s.liquidGlass) SettingsHint(when {
+            s.reduceEffects -> tr("Размытие отключено режимом уменьшения эффектов; материал стекла сохранён.", "Blur is disabled by Reduce effects; the glass material is retained.")
+            blurRejected || !blurAvailable -> tr("Системное размытие сейчас недоступно; прозрачность и блики стекла сохраняются.", "System blur is currently unavailable; glass transparency and reflections remain.")
+            !islandRunning -> tr("Размытие встроено в стекло и появится после включения острова.", "Blur is part of the glass and appears when the island is running.")
+            s.glassBlurStrength == 0 -> tr("Размытие выключено; прозрачность и блики стекла сохраняются.", "Blur is off; glass transparency and reflections remain.")
+            else -> tr("Сила размытия меняет фон, плотность стекла — его заливку. Изменения применяются к острову и второму кружочку.",
+                "Blur strength changes the background; glass density changes its tint. Changes apply to the island and activity bubble.")
+        })
+        GroupToggle(Pos.Single, Icons.Rounded.Tonality, tr("Тень", "Shadow"), tr("Заметна на светлом фоне; режим «Уменьшить эффекты» отключает её.", "Visible on light backgrounds; Reduce effects disables it."), s.shadow, color = Tile.Gray) {
+            v -> SettingsRepo.update { copy(shadow = v) }
         }
 
-        Text(
-            tr("Цвет кнопок «Ответить» и «Пометить прочитанным» — в «Функции» → «Уведомления».",
-                "The color of the Reply and Mark as read buttons is in Features → Notifications."),
-            color = Ui.Sub, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(horizontal = 8.dp),
-        )
+        SectionHeader(tr("Основные кнопки", "Main controls"))
+        ChoiceStrip(listOf(false, true), s.actionColorEnabled, { if (it) tr("Свой цвет", "Custom color") else tr("Стандартные цвета", "Default colors") }) {
+            enabled -> card = true; scene = PreviewScene.TIMER; SettingsRepo.update { copy(actionColorEnabled = enabled) }
+        }
+        if (s.actionColorEnabled) Swatches(lineColors.drop(2), s.actionColor) { color ->
+            card = true; scene = PreviewScene.TIMER; SettingsRepo.update { copy(actionColor = color) }
+        }
+        SettingsHint(tr("Показаны кнопки таймера. Цвета ответа на сообщения настраиваются в «Уведомлениях»; красный и зелёный у звонков сохраняются.",
+            "The preview shows timer controls. Reply colors are set in Notifications; red and green call controls keep their meaning."))
     }
 }
 
+@Composable
+private fun rememberBackdropAvailability(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val manager = remember(context) { context.getSystemService(android.view.WindowManager::class.java) }
+    var available by remember(context) { mutableStateOf(android.os.Build.VERSION.SDK_INT >= 31 &&
+        runCatching { manager.isCrossWindowBlurEnabled }.getOrDefault(false)) }
+    DisposableEffect(manager) {
+        val listener = java.util.function.Consumer<Boolean> { available = it }
+        var registered = false
+        if (android.os.Build.VERSION.SDK_INT >= 31) runCatching {
+            manager.addCrossWindowBlurEnabledListener(context.mainExecutor, listener); registered = true
+        }
+        onDispose {
+            if (android.os.Build.VERSION.SDK_INT >= 31 && registered) runCatching { manager.removeCrossWindowBlurEnabledListener(listener) }
+        }
+    }
+    return available
+}
+
+@Composable
+fun <T> ChoiceStrip(values: List<T>, selected: T, title: (T) -> String, onSelect: (T) -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Ui.Card).selectableGroup()) {
+        values.forEachIndexed { index, value ->
+            val checked = selected == value
+            Row(Modifier.fillMaxWidth().background(if (checked) Ui.Primary.copy(alpha = 0.08f) else Color.Transparent)
+                .selectable(selected = checked, role = Role.RadioButton, onClick = { onSelect(value) })
+                .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(checked, onClick = null, modifier = Modifier.size(24.dp),
+                    colors = RadioButtonDefaults.colors(selectedColor = Ui.Primary, unselectedColor = Ui.Sub))
+                Spacer(Modifier.width(12.dp))
+                Text(title(value), color = Ui.Text, fontSize = 15.sp, lineHeight = 20.sp, modifier = Modifier.weight(1f))
+            }
+            if (index != values.lastIndex) HorizontalDivider(Modifier.padding(start = 52.dp, end = 16.dp), color = Ui.Divider)
+        }
+    }
+}
+
+@Composable
+fun SettingsHint(text: String) { Text(text, color = Ui.Sub, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(horizontal = 6.dp)) }
+
+private fun half(value: Float) = kotlin.math.round(value * 2) / 2f
+private fun IslandSettings.edge(card: Boolean, index: Int, value: Float): IslandSettings = if (card) when (index) {
+    0 -> copy(expandedOutlineTopWidth = value); 1 -> copy(expandedOutlineRightWidth = value)
+    2 -> copy(expandedOutlineBottomWidth = value); else -> copy(expandedOutlineLeftWidth = value)
+} else when (index) {
+    0 -> copy(outlineTopWidth = value); 1 -> copy(outlineRightWidth = value)
+    2 -> copy(outlineBottomWidth = value); else -> copy(outlineLeftWidth = value)
+}
 /** Кружки цветов в карточке: выбранный — с галочкой. */
 @Composable
 fun Swatches(colors: List<Long>, selected: Long, onPick: (Long) -> Unit) {
+    var picker by rememberSaveable { mutableStateOf(false) }
+    if (picker) HsvColorPickerDialog(selected, { picker = false }) { color -> onPick(color); picker = false }
     FlowRow(
         Modifier
             .fillMaxWidth()
@@ -144,6 +259,10 @@ fun Swatches(colors: List<Long>, selected: Long, onPick: (Long) -> Unit) {
                     Icon(Icons.Rounded.Check, null, tint = if (color.luminance() > 0.5f) Color.Black else Color.White)
                 }
             }
+        }
+        Box(Modifier.size(44.dp).clip(CircleShape).background(Ui.IconBg).border(1.dp, Ui.Outline, CircleShape)
+            .clickable { picker = true }.testTag("open-hsv-picker"), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Colorize, tr("Выбрать свой цвет", "Choose a custom color"), tint = Ui.Primary)
         }
     }
 }

@@ -13,13 +13,14 @@ import com.akira.island.core.LiveInfo
 import com.akira.island.core.LiveKind
 import com.akira.island.core.Turn
 import com.akira.island.core.tr
+import com.akira.island.core.trf
 import com.akira.island.data.SettingsRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
@@ -171,7 +172,7 @@ object NavScreenParser {
         val time = all.firstOrNull { clock.matches(it.text) }?.text
         val left = (all.firstOrNull { hours.matches(it.text) } ?: all.firstOrNull { minutes.matches(it.text) })
             ?.text?.replace(Regex("""\s+"""), " ")
-        val eta = listOfNotNull(time?.let { tr("Прибытие в $it", "Arrive $it") }, left?.let(LiveParser::units),
+        val eta = listOfNotNull(time?.let { trf("Прибытие в {0}", "Arrive {0}", it) }, left?.let(LiveParser::units),
             total?.text?.replace(Regex("""\s+"""), " ")?.let(LiveParser::units))
             .takeIf { it.isNotEmpty() }?.joinToString(" · ")
         // Направление — только из подсказки: в подписях кнопок («← шаг влево») тоже бывают «влево» и «вправо»
@@ -285,12 +286,7 @@ class NavScreenReader(private val service: AccessibilityService, private val sco
         clearJob?.cancel()
         current = pkg
         job = scope.launch {
-            while (isActive) {
-                // Экран погашен — читать нечего, ждём, пока его включат
-                if (!IslandBus.screenOn.value) IslandBus.screenOn.first { it }
-                if (SettingsRepo.current.cardLive) runCatching { read(pkg) }
-                delay(1500)
-            }
+            visiblePolling(IslandBus.screenOn, SettingsRepo.state.map { it.cardLive }.distinctUntilChanged(), 1500, { read(pkg) })
         }
     }
 

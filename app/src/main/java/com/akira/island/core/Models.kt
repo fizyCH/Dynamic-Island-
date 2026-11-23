@@ -41,7 +41,7 @@ data class LyricLine(val timeMs: Long, val text: String)
 
 enum class LyricsStatus { LOADING, MISSING, FOUND }
 
-/** [synced] = false — у трека нашёлся только обычный текст, строки разложены по его длине. */
+/** [synced] = false — обычный текст без временных меток; его нельзя показывать как караоке. */
 data class Lyrics(val key: String, val lines: List<LyricLine>, val synced: Boolean = true) {
     /** Индекс строки, которая поётся в момент [pos], или -1 до первой строки. */
     fun indexAt(pos: Long): Int {
@@ -70,8 +70,20 @@ data class ProgressInfo(
     val max: Int,
     val indeterminate: Boolean,
     val postTime: Long,
+    val transferDetails: TransferDetails? = null,
 ) {
     val fraction: Float get() = if (max > 0) (progress.toFloat() / max).coerceIn(0f, 1f) else 0f
+}
+
+enum class RecordingKind {
+    VOICE, SCREEN, VIDEO, GENERIC;
+
+    val title: String get() = when (this) {
+        VOICE -> tr("Запись звука", "Audio recording")
+        SCREEN -> tr("Запись экрана", "Screen recording")
+        VIDEO -> tr("Запись видео", "Video recording")
+        GENERIC -> tr("Запись", "Recording")
+    }
 }
 
 data class ChronoInfo(
@@ -91,15 +103,15 @@ data class ChronoInfo(
     val pause: PendingIntent? = null,
     val resume: PendingIntent? = null,
     val reset: PendingIntent? = null,
-    /** Это запись экрана или голоса, а не таймер: микрофон и время записи */
-    val recording: Boolean = false,
-    /** У уведомления был chronometer-extra — по его исчезновению ловим паузу записи */
-    val chronometer: Boolean = false,
-    /** Notification.when последнего обновления — у Vivo по его смене ловим паузу/продолжение */
+    /** Тип записи подтверждён уведомлением источника; заголовок сам по себе не делает таймер диктофоном. */
+    val recordingKind: RecordingKind? = null,
+    /** Original notification destination; recording controls never replace missing actions with guessed intents. */
+    val open: PendingIntent? = null,
+    /** Notification.when последнего обновления — у Vivo по его смене ловим паузу/продолжение. */
     val notificationWhen: Long = 0L,
-    /** Количество кругов/флажков, прочитанных из «Часов» */
+    /** Количество кругов/флажков секундомера. */
     val flags: Int = 0,
-    /** Кнопка «Флажок»/«Круг» из уведомления, если приложение её отдаёт */
+    /** Кнопка «Количество»/«Флажок» из уведомления «Часов». */
     val lap: PendingIntent? = null,
 ) {
     fun elapsed(nowWall: Long): Long = pausedMs ?: if (countDown) (base - nowWall).coerceAtLeast(0) else nowWall - base
@@ -116,36 +128,9 @@ data class ChronoInfo(
         const val DONE_MS = 3_000L
     }
 
-    /** Запись экрана или звука — показывается красным. */
-    val isRecording: Boolean
-        get() = recording || title.lowercase().let { t -> "record" in t || "запис" in t }
-
-    /** Это именно запись экрана, а не диктофон: у неё мигающий кружок и кнопка «Стоп». */
-    val isScreenRecording: Boolean
-        get() {
-            if (!isRecording) return false
-            val p = pkg.lowercase()
-            val t = title.lowercase()
-            return p == "com.android.systemui" || "smartshot" in p || "screen" in p || "screen" in t || "экран" in t
-        }
-
-    /** Диктофон: кнопку «Стоп» в острове не показываем, только синхронное время. */
-    val isVoiceRecording: Boolean get() = isRecording && !isScreenRecording
-}
-
-/** Активная точка доступа: сколько устройств подключено. */
-data class HotspotInfo(val clients: Int, val stop: PendingIntent? = null) {
-    val clientsText: String
-        get() {
-            if (clients <= 0) return tr("Нет устройств", "No devices")
-            val ru = when {
-                clients % 10 == 1 && clients % 100 != 11 -> "$clients устройство"
-                clients % 10 in 2..4 && clients % 100 !in 12..14 -> "$clients устройства"
-                else -> "$clients устройств"
-            }
-            val en = if (clients == 1) "1 device" else "$clients devices"
-            return tr(ru, en)
-        }
+    val isRecording: Boolean get() = recordingKind != null
+    val recording: Boolean get() = isRecording
+    val screenRecording: Boolean get() = recordingKind == RecordingKind.SCREEN
 }
 
 /** Звонок из уведомления звонилки: входящий или идущий разговор. */
@@ -210,17 +195,24 @@ data class TimerState(
     val paused: Boolean get() = pausedLeft != null && !ringing
 }
 
-data class StopwatchState(
-    val startedAt: Long?,
-    val accumulated: Long,
-    /** Отметки (флажки): общий отсчёт в момент каждой метки */
-    val laps: List<Long> = emptyList(),
-) {
+data class StopwatchState(val startedAt: Long?, val accumulated: Long) {
     fun elapsed(now: Long): Long = accumulated + (startedAt?.let { now - it } ?: 0)
     val running: Boolean get() = startedAt != null
 }
 
-data class BatteryInfo(val level: Int = -1, val charging: Boolean = false)
+data class BatteryInfo(
+    val level: Int = -1,
+    val charging: Boolean = false,
+    /** Ток и напряжение аккумулятора, если устройство отдаёт их через BatteryManager. */
+    val currentMa: Float? = null,
+    val voltageV: Float? = null,
+    /** Измеренная мощность на аккумуляторе, не номинальная мощность зарядного устройства. */
+    val powerWatts: Float? = null,
+    /** До полного заряда: оценка Android либо явно отмеченная приблизительная; null — неизвестно. */
+    val remainingMs: Long? = null,
+    /** True only for an approximate rate observed during this charging session. */
+    val remainingApproximate: Boolean = false,
+)
 
 /** Как событие выглядит в острове. */
 enum class NoticeStyle {
@@ -287,6 +279,21 @@ data class AppMessage(
     val sensitive: Boolean = false,
 )
 
+/** Уведомление в «Истории уведомлений»: ждёт в острове, пока его не прочитают, не очистят или не выйдет время. */
+data class InboxItem(
+    val key: String,
+    val pkg: String,
+    val appName: String,
+    val title: String,
+    val text: String,
+    val avatar: ImageBitmap?,
+    val appIcon: ImageBitmap?,
+    val intent: PendingIntent?,
+    /** Когда пришло, System.currentTimeMillis */
+    val time: Long,
+    val sensitive: Boolean,
+)
+
 /**
  * Короткое событие в стиле iOS: слева значок и подпись, справа состояние.
  * [battery] рисует справа батарейку, [ring] — кольцо (например, заряд наушников),
@@ -333,8 +340,6 @@ object Tints {
     val Purple = Color(0xFFBF5AF2)
     val Teal = Color(0xFF64D2FF)
     val Gray = Color(0xFF8E8E93)
-    /** Автообводка на тёмном фоне — чуть темнее обычного серого. */
-    val AutoOutline = Color(0xFF747479)
     val Lavender = Color(0xFFC6C3F7)
 }
 

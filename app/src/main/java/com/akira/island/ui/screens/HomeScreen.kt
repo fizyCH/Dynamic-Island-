@@ -6,10 +6,8 @@ import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,8 +32,8 @@ import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.Lightbulb
@@ -49,11 +47,9 @@ import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.Vibration
-import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,8 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -76,29 +70,19 @@ import com.akira.island.core.AlarmInfo
 import com.akira.island.core.AppMessage
 import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
-import com.akira.island.core.HotspotInfo
 import com.akira.island.core.IslandBus
-import com.akira.island.core.MediaInfo
 import com.akira.island.core.MsgAction
 import com.akira.island.core.Notice
 import com.akira.island.core.NoticeStyle
 import com.akira.island.core.PayReady
 import com.akira.island.core.Tints
 import com.akira.island.core.tr
+import com.akira.island.core.trf
 import com.akira.island.data.SettingsRepo
-import com.akira.island.data.WallpaperTone
-import com.akira.island.island.Act
-import com.akira.island.island.CompactContent
 import com.akira.island.island.Ios
-import com.akira.island.island.RoundButton
-import com.akira.island.island.activeHeight
-import com.akira.island.island.islandGlow
-import com.akira.island.island.islandShape
 import com.akira.island.island.rememberHaptic
 import com.akira.island.service.NotificationParser
-import com.akira.island.service.ScreenTone
 import com.akira.island.service.SystemBanners
-import com.akira.island.update.UpdateChecker
 import com.akira.island.ui.Group
 import com.akira.island.ui.GroupItem
 import com.akira.island.ui.GroupToggle
@@ -110,9 +94,10 @@ import com.akira.island.ui.Pos
 import com.akira.island.ui.Screen
 import com.akira.island.ui.SectionHeader
 import com.akira.island.ui.Tile
-import com.akira.island.ui.UpdateSection
 import com.akira.island.ui.ToggleCard
 import com.akira.island.ui.Ui
+import com.akira.island.ui.UpdateSection
+import com.akira.island.update.UpdateChecker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -205,7 +190,6 @@ fun HomeScreen(open: (Screen) -> Unit) {
             KeepAliveItem(Pos.Middle, open)
             // И про банки, которые не пускают, пока остров включён
             BanksItem(Pos.Middle, open)
-            // Быстрый доступ к отключению вибрации: настройка есть и в «Функции → Поведение»
             GroupToggle(Pos.Middle, Icons.Rounded.Vibration, tr("Вибрация", "Vibration"),
                 tr("Отклик при нажатии и свайпах по острову", "Feedback when tapping and swiping the island"),
                 s.haptics, color = Tile.Pink) { v -> SettingsRepo.update { copy(haptics = v) } }
@@ -289,11 +273,9 @@ private fun DoubleBannerCard(app: String, onFix: () -> Unit, onHide: () -> Unit)
         Text(tr("Сообщения приходят дважды?", "Messages show up twice?"), color = Ui.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(
-            tr(
-                "Сообщение показывает и остров, и сам $app своей плашкой. Выключите у него «Всплывающие уведомления» — " +
-                    "останется только остров, а в шторке уведомление сохранится.",
-                "Both the island and $app itself show the message. Turn off its “Pop on screen” — only the island will " +
-                    "remain, and the notification stays in the shade.",
+            trf(
+                "Сообщение показывает и остров, и сам {0} своей плашкой. Выключите у него «Всплывающие уведомления» — останется только остров, а в шторке уведомление сохранится.",
+                "Both the island and {0} itself show the message. Turn off its “Pop on screen” — only the island will remain, and the notification stays in the shade.", app,
             ),
             color = Ui.Sub, fontSize = 14.sp, lineHeight = 20.sp,
         )
@@ -482,34 +464,6 @@ private fun demos(context: Context): List<Demo> = listOf(
     Demo(Icons.Rounded.HourglassBottom, tr("Таймер", "Timer"), tr("Обратный отсчёт одной минуты", "A one-minute countdown"), Tile.Orange) {
         Controls.startTimer(1)
     },
-    Demo(Icons.Rounded.Mic, tr("Запись", "Recording"),
-        tr("Красная волна, таймер и кнопка «Стоп»", "Red wave, timer and Stop"), Tile.Red) {
-        val key = "demo-recording"
-        val now = System.currentTimeMillis()
-        IslandBus.chrono.value = IslandBus.chrono.value + (key to ChronoInfo(
-            key = key,
-            pkg = context.packageName,
-            title = tr("Запись экрана", "Screen recording"),
-            icon = NotificationParser.icon(context, context.packageName),
-            base = now,
-            countDown = false,
-            postTime = now,
-            recording = true,
-        ))
-        IslandBus.scope.launch {
-            delay(6_000)
-            IslandBus.chrono.value = IslandBus.chrono.value - key
-        }
-    },
-    Demo(Icons.Rounded.WifiTethering, tr("Точка доступа", "Personal Hotspot"),
-        tr("Слева значок, справа число устройств", "Icon on the left, device count on the right"), Tile.Blue) {
-        val previous = IslandBus.hotspot.value
-        IslandBus.hotspot.value = HotspotInfo(1)
-        IslandBus.scope.launch {
-            delay(6_000)
-            if (IslandBus.hotspot.value?.clients == 1) IslandBus.hotspot.value = previous
-        }
-    },
     Demo(Icons.Rounded.Alarm, tr("Будильник", "Alarm"), tr("Время подъёма и сколько осталось спать", "Wake-up time and how long you can sleep"), Tile.Indigo) {
         IslandBus.post(
             Notice(
@@ -574,60 +528,5 @@ fun Arrow() {
 /** Живой пример капсулы с текущими настройками: толщина, боковые части, цвет и контур. */
 @Composable
 fun IslandPreview(expanded: Boolean = false) {
-    val s by SettingsRepo.state.collectAsState()
-    val context = LocalContext.current
-    val darkWallpaper by WallpaperTone.dark.collectAsState()
-    val darkScreen by ScreenTone.dark.collectAsState()
-    LaunchedEffect(Unit) { WallpaperTone.refresh(context) }
-    val demo = remember {
-        MediaInfo(
-            key = "demo", pkg = "", title = tr("Демо", "Demo"), artist = "", album = null, art = null,
-            accent = Tints.Lavender, durationMs = 0, positionMs = 0, positionTime = SystemClock.elapsedRealtime(),
-            speed = 1f, playing = true, canSeek = false,
-        )
-    }
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(140.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF3B3860), Color(0xFF1F1E27)))),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        val act = if (expanded) Act.Idle else Act.MediaA(demo)
-        val corner = (if (expanded) s.height.dp else activeHeight(s)) / 2
-        val shape = islandShape(corner, s)
-        Box(
-            Modifier
-                // «Как вырез» — капсула от самого верха, как на экране
-                .padding(top = if (s.notch) 0.dp else 18.dp)
-                // «Свечение обложки» видно и на примере
-                .then(if (!expanded && s.fxGlow && !s.reduceEffects) Modifier.drawBehind { islandGlow(demo.accent, 1f, corner.toPx(), s.notch) } else Modifier)
-                .clip(shape)
-                .background(Color(s.color))
-                .then(
-                    when {
-                        s.outline -> Modifier.border(s.outlineWidth.dp, if (s.outlineFromArt) Tints.Lavender else Color(s.outlineColor), shape)
-                        s.autoOutlineOnScreen -> if (darkScreen) Modifier.border(1.dp, Tints.AutoOutline, shape) else Modifier
-                        s.autoOutlineOnDark && darkWallpaper -> Modifier.border(1.dp, Tints.AutoOutline, shape)
-                        else -> Modifier
-                    },
-                )
-                .animateContentSize(),
-        ) {
-            CompactContent(act, s, 400.dp)
-        }
-        // Пример самих стеклянных кнопок: капсула остаётся сплошной, стекло — только на кнопках
-        if (s.liquidGlass && !expanded) {
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RoundButton(Ios.back, size = 32.dp, bg = Color.Transparent, iconScale = 0.62f) {}
-                RoundButton(Ios.play, size = 40.dp, bg = Color.Transparent, iconScale = 0.62f) {}
-                RoundButton(Ios.forward, size = 32.dp, bg = Color.Transparent, iconScale = 0.62f) {}
-            }
-        }
-    }
+    SettingsPreview(card = expanded)
 }

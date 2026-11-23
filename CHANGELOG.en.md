@@ -6,161 +6,74 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
-## [1.6.39] — 2026-11-05
+## [1.7.3] — 2026-11-23
 
-- ▶️ **YouTube no longer appears in the island’s media player**: its media session is not connected. YouTube Music keeps working as before.
+### 🚀 Upstream 1.7.2 merged into the fork
+- 🫧 **Liquid Glass**, Brief, weather, pinned apps and contacts.
+- 🎵 Improved lyrics, smooth sweep and new font/color settings.
+- 🔔 Notification history, display styles, silent messages and per-app rules.
+- 🔓 Face ID via Shizuku, alarm creation, scroll-to-top and idle auto-hide.
+- 🔋 Battery glyph, charging estimate, transfer speed and hotspot improvements.
+- 🌍 New languages and the 1.7.1–1.7.2 fixes.
 
-## [1.6.38] — 2026-11-05
+### 🔧 Fork features preserved
+- 🟢 Privacy dot with a drop effect, hidden when the island expands.
+- 🔋 Low-battery warnings at 5%, 10% and a configurable 20–50% threshold.
+- ▶️ YouTube is excluded from the media player; YouTube Music remains.
+- 🎙️ Paused voice/screen recording (including Vivo SmartShot) keeps its card.
+- 🚩 Clock stopwatch laps and lap counts from “Count: N”.
+- ⏰ Alarms with a hidden creator are shown again; service midnight alarms are filtered.
+- 📳 Quick vibration switch on Home.
 
-- 💧 **The privacy dot is round again**, but appears and disappears with a drop effect. It still hides when the island is expanded.
+## [1.7.2] — 2026-11-15
 
-## [1.6.37] — 2026-11-05
+### 🛠 Fixes
+- In-app updates download the APK again: after the repository was renamed, GitHub returns file links with the new owner name, and the address check rejected them. The version and its notes appeared, but the download never started.
 
-- 💧 **The privacy dot is now a drop**: it appears to the right of the camera with a soft animation and hides when the island is expanded.
-- 📳 **Vibration**: added a quick “Vibration” switch on the home screen; it is also in Features → Behavior → Haptics. Turn it off and the island won’t vibrate on taps or swipes.
+## [1.7.1] — 2026-11-15
 
-## [1.6.36] — 2026-11-04
+### 🛠 Fixes
+- Dismiss app notifications right from the island: swiping up on the banner also clears it from the shade, the expanded card can be swiped down or closed with the ✕ button, and tapping outside collapses it.
+- The expanded island (music player and other cards) collapses on swipe up again.
 
-- ⏰ **Alarms show up again**: on Android 14+/Vivo the system often hides the alarm’s author — such alarms are no longer discarded. Service entries without an author exactly at 00:00 are still hidden.
+## [1.7.0] — 2026-11-15
 
-## [1.6.35] — 2026-11-04
+### ✨ New features
+- 🫧 **Liquid Glass**: refined highlights and transparency, glass density and system blur strength controls. Available for the island, expanded cards and secondary activity on supported devices.
+- 📌 **Pinned apps and contacts**: a compact shortcut row below the date.
+- 🕒 **Brief**: separate compact clock, steps and weather pages, clock styles and extra controls.
+- 🌤 **Weather**: city selection, a standalone card or Brief page, manual refresh and retries after errors.
+- 🎵 **Lyrics**: a continuous soft highlighting wave and smooth line transitions; unsynced lyrics remain scrollable.
+- 🎨 **Custom colors and fonts**: text color, HEX/HSV picker, system or custom fonts, weight and element sizing.
+- 📶 **Hotspot**: persistent state, a settings shortcut and client counts when reliable system information is available.
+- ⬇️ **Transfer speed in expanded download cards**: app-provided details or optional approximate total network rates ↓/↑, preserving actual download percentages.
+- 🔓 **Face ID · face only**: optional verified face-unlock animation using separately configured Shizuku. PIN and fingerprint unlock are not presented as Face ID.
+- ⏰ **Create alarms**, auto-hide the idle island, scroll to top in supported apps and keep cards open on outside touch.
+- 🔋 **Battery**: an icon filled according to the current charge and optional approximate charging-time estimates.
+- 🔔 **Notifications**: history, display styles, duration, silent messages, per-app rules and missing-notification diagnostics.
+- 🌍 **Languages**: Indonesian, Portuguese, Kazakh, French and Spanish; improved language switching.
+- 💜 **Support the developer**: Telegram and Boosty in About, with English and Russian text.
 
-- 🟢 **The privacy dot no longer covers activities**: when it appears, the compact island widens slightly, moving content away from the camera. The width returns when the dot is gone.
-- 🚩 **Stopwatch laps no longer reset**: the island reads “Count: N” from the notification (including RemoteViews) and keeps the counter between updates.
-- 🔋 **Low battery three times**: warnings at 5%, 10% and a configurable upper threshold of 20–50% (20% by default).
-- 🧪 The Try it screen now has demos for low battery, power saving, the privacy dot and stopwatch laps.
+- 🙏 Thanks to **@uswer1106** for helping improve the app.
 
-## [1.6.34] — 2026-11-04
+### 🛠 Fixes and optimization
+- Distinct voice, screen and camera recording states; improved Google Recorder detection, pause/resume and real source controls.
+- Improved lyrics search, cache, Enhanced LRC handling, track changes and media sessions. MediaStyle alone no longer classifies music as a download.
+- Improved consecutive messages, replies, mark-as-read actions and action wrapping.
+- Pending alarms use the secondary activity; improved false-alarm filtering and timer layout on narrow cards.
+- Preserved detected payment amounts and improved recognition of brief success screens; individual bank apps still require device testing.
+- Refined animations, notch-mode blur geometry, shortcut placement and landscape color-picker accessibility.
+- Reduced polling, redundant subscriptions and hidden-effect work; removed confirmed unused code.
+- Hardened download URLs, response limits, APK/certificate checks and partial-download cleanup.
+- **296 unit tests passed** on functional commit `1863d0b`; this does not replace testing every phone.
 
-- ⏰ **False 00:00 alarm**: the island no longer shows service `AlarmClockInfo` entries from calendars and system apps. Alarms are only shown when they come from a known alarm-clock app.
-- 🚩 **Stopwatch flag**: the button now presses the **“Count”** action in the stopwatch notification instead of opening Clock and looking for a button on screen.
-- 🟢 **Face scanner**: the green privacy dot no longer appears during face unlock — the camera is being used by the system scanner on the lock screen.
+### Compatibility
+System blur depends on Android and firmware. Face ID requires Shizuku and reliable face events. Hotspot, recording and Bluetooth data depend on the source. TrafficStats reports approximate total network speed, not an exact per-file rate.
 
-## [1.6.33] — 2026-11-03
+### Updating
+The package remains `com.akira.island`. APKs for 1.6.1, 1.6.2, 1.6.5 and the verified test 1.7.0 use compatible signing certificates; versionCode is now 14. Android's standard installer asks for confirmation. Previous upgrade tests preserved data, but Android 15 restricted Accessibility again: you may need to manually allow restricted settings and re-enable the service. The complete final-APK upgrade flow on a physical device has not yet been verified.
 
-- 🟢 The privacy indicator is now **vertically centered** on the camera/capsule; its right-of-camera horizontal position is unchanged.
-- 🟠 The power-saving event is now orange instead of green (including its Events tile).
-- ⏸️ The recording/voice-recorder card stays in the island while paused.
-
-## [1.6.32] — 2026-11-03
-
-- 🔋 **Low battery**: the threshold is configurable in Events → Battery, 20% by default.
-- ⚡ **Power saving**: an event appears in the island when it turns on/off; can be disabled in Events.
-- 🟢 **Privacy indicator to the right of the camera**: green for the camera, orange for the microphone.
-- ⏸️ Pausing recording/voice recorder no longer closes the activity: the card stays and time freezes.
-- 🚩 The stopwatch flag is placed in Clock, and the lap count is read from there.
-
-## [1.6.31] — 2026-11-02
-
-- 🎙️ Vivo SmartShot and voice recorder: state is read from RemoteViews text (“Recording”/“Paused”), time and `when`; pause and resume should work both ways.
-- 🔴 SmartShot screen recording shows the blinking dot; the voice recorder uses the microphone.
-- 🚩 The Clock stopwatch flag now taps the flag in Clock itself and reads the lap count from there.
-- ⏳ Paused timers/stopwatches stay in the island.
-
-## [1.6.30] — 2026-11-02
-
-- 🎥 **Vivo SmartShot/screen recording** is recognized as screen recording: blinking dot instead of the microphone.
-- 🎙️ **Vivo voice recorder** (`com.vivo.soundrecorder`) and SmartShot: pause/resume is detected from changes in `notification.when`, RemoteViews and the chronometer; time runs again after resume.
-- ⏳ Paused timers/stopwatches stay in the island.
-- 🫥 Swipe-to-hide/show activities.
-
-## [1.6.29] — 2026-11-02
-
-- 🔴 **Screen recording uses the blinking dot again**, while the voice recorder uses the microphone.
-- ⏯️ **Recording pause** is read from the Chronometer in RemoteViews; after resuming, time runs again instead of staying frozen.
-- 🎙️ OriginOS: voice-recorder/screen-recording pause is detected from RemoteViews, actions and the chronometer; Clock is recognized by channel/title.
-- ⏳ Paused timers/stopwatches stay in the island.
-
-## [1.6.28] — 2026-11-02
-
-- 🖥️ **Screen recording now uses a screen icon**, while the voice recorder keeps the microphone.
-- 🎙️ For OriginOS and non-standard notifications: Clock is recognized by channel/title, and recording pause by RemoteViews, the Resume action and the chronometer.
-- ⏳ Paused timers/stopwatches stay in the island.
-- 🫥 Inward swipe hides the activity; a swipe from the middle brings it back.
-- 🚩 Stopwatch: flag button for marks while running.
-
-## [1.6.27] — 2026-11-02
-
-- 🫥 **Hide the activity with an inward swipe**: the island becomes an empty capsule. Swipe left or right from the middle to bring it back.
-- 🎙️ Screen recording and voice recorder use a microphone; pause should stop the island time.
-- ⏳ Paused Clock timers and stopwatches stay in the island; Resume remains available.
-- 🚩 Stopwatch: a flag button for marks while running and a mark count.
-- 🛜 Hotspot no longer turns off from the island.
-
-## [1.6.26] — 2026-11-01
-
-- 🎙️ **Screen recording and voice recorder:** microphone instead of a dot; pause stops the island time, including when the app removes the chronometer from its notification.
-- ⏳ **Timer and stopwatch:** pausing no longer removes the card from the island — it stays and Resume remains available.
-- 🚩 **Stopwatch:** a flag button for marks while running; the mark count is next to the time; when paused, a close/reset button.
-- 🕐 The timer is unchanged.
-
-## [1.6.25] — 2026-11-01
-
-- 🎙️ **Screen recording now uses a microphone**, like the voice recorder, with no blinking dot.
-- ⏸️ **Pausing the voice recorder or screen recording stops the island time** — “(Paused)” in the notification, Resume actions and a disappearing chronometer are recognized.
-- ⏳ **Clock timers and stopwatches stay in the island when paused** and no longer close; Resume remains available.
-- 🚩 Stopwatch: timer icon, a flag button for marks while running, and the mark count next to the time.
-
-## [1.6.24] — 2026-11-01
-
-- 🚩 **Stopwatch:** the timer icon is back, and while running the close button is replaced by a **flag button for marks**. The mark count is shown next to the time.
-- ⏸️ When paused, a close button appears; marks are kept when resumed.
-- 🕐 The timer is unchanged.
-- 🎙️ Voice recorder: pause/resume is synced, and the card no longer lingers after stopping.
-- 🔴 Screen recording: blinking dot, pause is respected.
-- 🛜 Hotspot shutdown removed from the island.
-
-## [1.6.23] — 2026-11-01
-
-- ⏸️ **Pausing a Clock timer or stopwatch no longer closes the island**: the “(Paused)” title is recognized and the card stays open.
-- 🚩 **The stopwatch flag now also appears for the system Clock** — in the capsule, expanded island and bubble. The timer is unchanged.
-- 🎙️ **Voice recorder** freezes its time while paused and continues from the same point; the card no longer lingers after a full stop.
-- 🔴 **Screen recording** reacts to pause and shows the blinking dot in both states.
-
-## [1.6.22] — 2026-11-01
-
-- 🚩 **The flag and close button moved to the stopwatch**: the timer is unchanged. The stopwatch starts with a flag, and the close button appears only when paused.
-- ⏸️ **Pausing the timer and stopwatch no longer collapses the island** — auto-collapse is disabled while paused.
-- 🎙️ Voice recorder without a Stop button, with time synced to pause and resume.
-- 🔴 Screen recording with a blinking dot in the capsule and expanded island.
-- 🛜 Hotspot shutdown removed from the island.
-
-## [1.6.21] — 2026-11-01
-
-- ⏸️ Pausing the timer resets auto-collapse: the island stays expanded while the timer is paused.
-- 🚩 Timer: a flag on the left, the close button only when paused.
-- 🎙️ Voice recorder: no Stop button, time synced with pause and resume.
-- 🔴 Screen recording: a blinking dot in the capsule and the expanded island.
-- 🛜 Hotspot shutdown removed from the island.
-
-## [1.6.20] — 2026-11-01
-
-- 🎙️ Voice-recorder sync refined: pause freezes the island time, and resume continues from the same point.
-- 🚩 Timer: a flag at the start, the close button appears only when paused; the island stays after pausing.
-- 🔴 Screen recording: a blinking dot in the capsule and the expanded island, with the screen-recording stop button kept.
-- 🛜 Hotspot shutdown removed from the island.
-
-## [1.6.19] — 2026-11-01
-
-- 🛜 **Hotspot shutdown removed from the island** — the card still shows connected devices but no longer tries to turn tethering off.
-- 🚩 **The expanded timer starts with a flag**, and the close button appears only after pausing. Pausing no longer removes the island.
-- 🎙️ **The voice recorder has no Stop button in the island**; its time now stays in sync with the recording, including pause and resume, and no longer restarts from zero.
-- 🔴 **Screen recording uses a blinking red dot instead of the equalizer** — in the capsule and the expanded island. The screen-recording stop button remains.
-
-## [1.6.18] — 2026-11-01
-
-- 🛜 **Hotspot turns off from the island** — with the notification action when available; otherwise the service taps the Hotspot tile in Quick Settings. No settings page opens.
-- ⏹️ **Screen recording and voice recorder stop from the island** — with the notification Stop action or automatically through the notification shade. The recording app no longer opens.
-- ⏳ **Timer and stopwatch now use the hourglass icon** instead of the source app's logo — in the capsule, expanded island, bubble and quick actions.
-- ℹ️ The automation needs the accessibility service. If there is no Hotspot tile in Quick Settings, the island shows a short message instead of opening settings.
-
-## [1.6.17] — 2026-11-01
-
-- 💧 **Liquid Glass is now on the buttons only** — like iOS 26: glass player, timer, stopwatch and quick-action buttons, while the capsule, bubble and background stay solid.
-- 🎨 **Colored buttons become tinted glass**: the timer and flashlight keep their color, while neutral buttons look like clear glass with a soft top highlight and a lensed edge.
-- 📞 **Call buttons stay solid**: Answer is green and Decline is red, with no glass.
-- ⚙️ **Button glass density** in Appearance → Color and glass controls how strong the glass buttons look.
-- 🧩 The effect is powered by [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache 2.0).
+Full list in Russian: [CHANGELOG-1.7.0-FULL.md](docs/CHANGELOG-1.7.0-FULL.md).
 
 ## [1.6.5] — 2026-10-28
 

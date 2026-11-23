@@ -25,8 +25,6 @@ object Ios {
     val remove @Composable get() = ImageVector.vectorResource(R.drawable.ios_remove)
     val download @Composable get() = ImageVector.vectorResource(R.drawable.ios_download)
     val arrowUp @Composable get() = ImageVector.vectorResource(R.drawable.ios_arrow_up)
-    val batteryCharging @Composable get() = ImageVector.vectorResource(R.drawable.ios_battery_charging)
-    val batteryFull @Composable get() = ImageVector.vectorResource(R.drawable.ios_battery_full)
     val call @Composable get() = ImageVector.vectorResource(R.drawable.ios_call)
     val close @Composable get() = ImageVector.vectorResource(R.drawable.ios_close)
     val flash @Composable get() = ImageVector.vectorResource(R.drawable.ios_flash)
@@ -45,4 +43,7 @@ object Ios {
     val stop @Composable get() = ImageVector.vectorResource(R.drawable.ios_stop)
     val stopwatch @Composable get() = ImageVector.vectorResource(R.drawable.ios_stopwatch)
     val timer @Composable get() = ImageVector.vectorResource(R.drawable.ios_hourglass)
+    val chatbubble @Composable get() = ImageVector.vectorResource(R.drawable.ios_chatbubble_ellipses)
+    val bellOff @Composable get() = ImageVector.vectorResource(R.drawable.ios_notifications_off)
+    val vibrate @Composable get() = ImageVector.vectorResource(R.drawable.ios_phone_portrait)
 }

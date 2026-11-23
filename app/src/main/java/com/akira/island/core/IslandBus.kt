@@ -3,12 +3,14 @@ package com.akira.island.core
 import com.akira.island.data.SettingsRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,6 +30,9 @@ object IslandBus {
     val focus = MutableStateFlow<String?>(null)
 
     val media = MutableStateFlow<MediaInfo?>(null)
+    /** MusicFind присылает лайк и режим повтора отдельно от медиасессии. */
+    val musicFindFavorite = MutableStateFlow<Boolean?>(null)
+    val musicFindRepeat = MutableStateFlow<Int?>(null)
     val lyrics = MutableStateFlow<Lyrics?>(null)
     /** Как идёт поиск текста для трека с ключом first */
     val lyricsStatus = MutableStateFlow<Pair<String, LyricsStatus>?>(null)
@@ -49,34 +54,44 @@ object IslandBus {
     val timer = MutableStateFlow<TimerState?>(null)
     val stopwatch = MutableStateFlow<StopwatchState?>(null)
     val notice = MutableStateFlow<Notice?>(null)
+    /** User expanded the compact notification to read it inside the island. */
+    val messageDetail = MutableStateFlow(false)
+    /** «История уведомлений»: показанные сообщения, которые ещё ждут в острове */
+    val inbox = MutableStateFlow<List<InboxItem>>(emptyList())
     /** Идёт ввод ответа на уведомление: окну острова нужен фокус, чтобы показать клавиатуру */
     val reply = MutableStateFlow<ReplyState?>(null)
+    /** Обе оси наклона от -1 до 1, в координатах острова. */
+    val glassTilt = MutableStateFlow(GlassTilt.Zero)
     /** До какого момента (elapsedRealtime) показывать пример активности — пока двигают ползунок ширины */
     val widthPreviewUntil = MutableStateFlow(0L)
     /** Человек читает или отвечает — уведомление не убирается по таймеру */
     val noticeHold = MutableStateFlow(false)
     val battery = MutableStateFlow(BatteryInfo())
+    /** Режим звука (AudioManager.RINGER_MODE_*) и «Не беспокоить» — для кнопок раскрытого острова */
+    val ringer = MutableStateFlow(2)
+    val dnd = MutableStateFlow(false)
     val foregroundPackage = MutableStateFlow<String?>(null)
+    /** Expanded notification shade/quick settings detected by the accessibility service. */
+    val shadeOpen = MutableStateFlow(false)
     val landscape = MutableStateFlow(false)
+    /** Поворот экрана для острова «У камеры»: −90 — камера слева, 90 — справа, 0 — портрет */
+    val displayRotation = MutableStateFlow(0)
+    /** На сколько градусов повёрнут остров в своём окне сейчас (0 — как обычно, сверху) */
+    val contentRotation = MutableStateFlow(0)
     /** Вне часов «По расписанию» остров не показывается */
     val offSchedule = MutableStateFlow(false)
     /** Экран включён. Пока он погашен, датчик наклона и чтение экрана навигатора не работают — бережём батарею */
     val screenOn = MutableStateFlow(true)
-    /** Камера сейчас используется — зелёная точка у камеры */
-    val privacyCamera = MutableStateFlow(false)
-    /** Микрофон сейчас используется — оранжевая точка у камеры */
-    val privacyMic = MutableStateFlow(false)
     /** Включено энергосбережение Android — с «Экономией заряда» остров без живых эффектов */
     val powerSave = MutableStateFlow(false)
     /** Телефон заблокирован PIN-кодом, графическим ключом или паролем: тексты сообщений и кнопки скрыты */
     val locked = MutableStateFlow(false)
     /** На экране — экран блокировки (с PIN-кодом или без): в капсуле замок, если он включён в «Событиях» */
     val keyguard = MutableStateFlow(false)
-    /** MusicFind присылает сюда лайк и режим повтора, чтобы остров не зависел от media-сессии. */
-    val musicFindFavorite = MutableStateFlow<Boolean?>(null)
-    val musicFindRepeat = MutableStateFlow<Int?>(null)
-    /** Активная точка доступа: постоянная карточка со счётчиком устройств. */
-    val hotspot = MutableStateFlow<com.akira.island.core.HotspotInfo?>(null)
+    /** Камера сейчас используется — зелёная точка у камеры */
+    val privacyCamera = MutableStateFlow(false)
+    /** Микрофон сейчас используется — оранжевая точка у камеры */
+    val privacyMic = MutableStateFlow(false)
     /** Открыт экран «Размер и положение»: остров красный, чтобы подогнать его под камеру */
     val calibrating = MutableStateFlow(false)
     /** Играет та самая песня — остров празднует (пасхалка, Egg.kt) */
@@ -85,18 +100,39 @@ object IslandBus {
     @Volatile
     var lastTouch = 0L
 
-    private val queue = Channel<Notice>(capacity = 6, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private data class QueuedNotice(val notice: Notice, val revision: Long)
+    // A burst of messages should not disappear behind a single long-lived card.
+    private val queue = Channel<QueuedNotice>(capacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val messageRevisions = object : LinkedHashMap<String, Long>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 256
+    }
 
     init {
         scope.launch {
-            for (n in queue) {
+            for (queued in queue) {
+                val n = queued.notice
+                val key = n.message?.key
+                fun removed() = key != null && (messageRevisions[key] ?: 0L) != queued.revision
+                if (removed()) continue
+                val s = SettingsRepo.current
+                // «Задержка появления»; подтверждения того, что вы только что сделали (отправлено, оплачено), — сразу
+                if (s.noticeDelayMs > 0 && n.style != NoticeStyle.SENT && n.style != NoticeStyle.PAY_DONE) delay(s.noticeDelayMs.toLong())
+                if (removed()) continue
+                messageDetail.value = false
+                noticeHold.value = false
                 notice.value = n
-                val duration = SettingsRepo.current.noticeDurationMs + n.extraMs
+                val message = n.style == NoticeStyle.MESSAGE
+                val duration = if (message && s.messageSeconds > 0) s.messageSeconds * 1000L else s.noticeDurationMs + n.extraMs
                 // Уведомление уходит по времени или раньше, если его смахнули кликом
                 withTimeoutOrNull(duration) { notice.first { it?.id != n.id } }
+                // «Пока не смахнёте»: плашка ждёт, пока её не уберут; пришло следующее событие — уступает ему
+                if (message && s.messageSeconds < 0 && notice.value?.id == n.id && waitingIsEmpty()) {
+                    val seen = posted.value
+                    combine(notice, posted) { cur, p -> cur?.id != n.id || p != seen }.first { it }
+                }
                 // Пока отвечают или листают переписку, карточка остаётся; потом ещё чуть-чуть
                 if (notice.value?.id == n.id && noticeHold.value) {
-                    while (notice.value?.id == n.id && noticeHold.value) delay(200)
+                    combine(notice, noticeHold) { current, holding -> current?.id != n.id || !holding }.first { it }
                     if (notice.value?.id == n.id) withTimeoutOrNull(1500) { notice.first { it?.id != n.id } }
                 }
                 if (notice.value?.id == n.id) notice.value = null
@@ -106,10 +142,28 @@ object IslandBus {
         }
     }
 
+    /** Сколько событий отправлено в очередь — по нему плашка «пока не смахнёте» узнаёт, что пришло следующее */
+    private val posted = MutableStateFlow(0)
+
     fun post(n: Notice) {
-        queue.trySend(n)
+        queue.trySend(QueuedNotice(n, n.message?.key?.let { messageRevisions[it] } ?: 0L))
+        posted.value++
     }
+
+    /** Invalidate queued copies too, so a notification dismissed in the shade cannot reappear later. */
+    fun removeMessage(key: String) {
+        messageRevisions[key] = (messageRevisions[key] ?: 0L) + 1L
+        if (notice.value?.message?.key == key) {
+            notice.value = null
+            messageDetail.value = false
+            noticeHold.value = false
+            reply.value = null
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun waitingIsEmpty(): Boolean = queue.isEmpty
 }
 
-/** Команды службе: скриншот без острова, блокировка экрана, выключение острова (для банков). */
-enum class ServiceCommand { SCREENSHOT, LOCK, TURN_OFF }
+/** Команды службе: скриншот без острова, блокировка, выключение и прокрутка по явному жесту. */
+enum class ServiceCommand { SCREENSHOT, LOCK, TURN_OFF, SCROLL_TOP }
