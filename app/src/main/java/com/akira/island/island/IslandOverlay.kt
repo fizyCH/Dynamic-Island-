@@ -583,7 +583,7 @@ internal fun IslandBody(
     val haptic = rememberHaptic()
     val darkWallpaper by WallpaperTone.dark.collectAsState()
     val darkScreen by ScreenTone.dark.collectAsState()
-    val autoOutline = !preview && when {
+    val autoOutline = when {
         s.autoOutlineOnScreen -> darkScreen
         s.autoOutlineOnDark -> darkWallpaper
         else -> false

@@ -16,6 +16,9 @@ object HotspotMonitor {
         "com.android.networkstack.tethering", "com.google.android.networkstack.tethering",
         "com.miui.securitycenter", "com.oplus.wirelesssettings", "com.coloros.wirelesssettings")
 
+    /** Example in “Try it”: changes only the in-memory card state, not the real hotspot. */
+    fun demo(status: HotspotStatus) = publish(status)
+
     private fun publish(status: HotspotStatus) {
         mutable.value = status
         SystemEventObservation.state.value = SystemEventObservation.state.value.copy(hotspot = status.enabled)

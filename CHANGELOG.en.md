@@ -6,6 +6,15 @@ Versioning: the second number (1.5, 1.6…) means new and changed features, the 
 
 > Since 1.6.1 the app and the island speak English (Features → General → Language). Earlier versions were in Russian only, so older entries give the Russian label in brackets.
 
+## [1.7.5] — 2026-11-23
+
+### ♻️ Fork features restored
+- Automatic background border works again on the capsule, secondary activity and live preview.
+- Stopping a recording without a Stop action can again open the shade and press Stop for you.
+- The Try it screen has the recording and hotspot examples back.
+- MusicFind, privacy dot, low battery, YouTube, alarms, stopwatch laps and vibration are preserved.
+- All new 1.7.0–1.7.2 features remain in place.
+
 ## [1.7.4] — 2026-11-23
 
 ### 🖼 Automatic border

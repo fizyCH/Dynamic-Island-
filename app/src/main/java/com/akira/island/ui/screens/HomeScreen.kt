@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,12 +76,15 @@ import com.akira.island.core.MsgAction
 import com.akira.island.core.Notice
 import com.akira.island.core.NoticeStyle
 import com.akira.island.core.PayReady
+import com.akira.island.core.RecordingKind
 import com.akira.island.core.Tints
 import com.akira.island.core.tr
 import com.akira.island.core.trf
 import com.akira.island.data.SettingsRepo
 import com.akira.island.island.Ios
 import com.akira.island.island.rememberHaptic
+import com.akira.island.service.HotspotMonitor
+import com.akira.island.service.HotspotStatus
 import com.akira.island.service.NotificationParser
 import com.akira.island.service.SystemBanners
 import com.akira.island.ui.Group
@@ -457,6 +461,36 @@ private fun demos(context: Context): List<Demo> = listOf(
                 ),
             ),
         )
+    },
+    Demo(Icons.Rounded.Mic, tr("Запись", "Recording"),
+        tr("Красная волна, таймер и кнопка «Стоп»", "Red wave, timer and Stop"), Tile.Red) {
+        val key = "demo-recording"
+        val now = System.currentTimeMillis()
+        IslandBus.chrono.value = IslandBus.chrono.value + (key to ChronoInfo(
+            key = key,
+            pkg = context.packageName,
+            title = tr("Запись экрана", "Screen recording"),
+            icon = NotificationParser.icon(context, context.packageName),
+            base = now,
+            countDown = false,
+            postTime = now,
+            recordingKind = RecordingKind.SCREEN,
+        ))
+        IslandBus.scope.launch {
+            delay(6_000)
+            IslandBus.chrono.value = IslandBus.chrono.value - key
+        }
+    },
+    Demo(Icons.Rounded.WifiTethering, tr("Точка доступа", "Personal Hotspot"),
+        tr("Слева значок, справа число устройств", "Icon on the left, device count on the right"), Tile.Blue) {
+        val previous = HotspotMonitor.state.value
+        // Демо не должно менять настоящую точку доступа: состояние подставляется только для примера.
+        // После показа возвращаем то, что видел менеджер.
+        HotspotMonitor.demo(HotspotStatus(enabled = true, clients = 1))
+        IslandBus.scope.launch {
+            delay(6_000)
+            if (HotspotMonitor.state.value.clients == 1) HotspotMonitor.demo(previous)
+        }
     },
     Demo(Icons.Rounded.Call, tr("Входящий звонок", "Incoming call"), tr("Можно ответить и сбросить", "You can answer or decline"), Tile.Green) {
         Controls.showTestCall()

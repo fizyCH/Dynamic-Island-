@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import com.akira.island.core.ChronoInfo
 import com.akira.island.core.Controls
 import com.akira.island.core.GlassTilt
 import com.akira.island.core.GlassTiltFilter
@@ -246,6 +247,8 @@ class IslandService : AccessibilityService() {
             })
         alarmMonitor = AlarmMonitor(this).also { runCatching { it.start() } }
         privacyMonitor = PrivacyMonitor(this).also { runCatching { it.start() } }
+        // Если запись не дала кнопку «Стоп», служба сама нажмёт её в системной шторке.
+        Controls.stopRecordingAutomation = { info -> runSystemAutomation { stopRecordingViaShade(info) } }
         WeatherRepo.start(this, scope)
         IslandBus.serviceRunning.value = display != null && touch != null
         faceUnlock = com.akira.island.face.FaceUnlockController(this, scope).also { it.start() }
@@ -301,6 +304,9 @@ class IslandService : AccessibilityService() {
                     scrollToTop?.cancel()
                     keyguardShown = true
                     PayMonitor.clearReady()
+                } else {
+                    // Обои могли смениться, пока система не отдала цвета; проверяем ещё раз при включении экрана
+                    WallpaperTone.refresh(this@IslandService)
                 }
             }
         }
@@ -510,6 +516,136 @@ class IslandService : AccessibilityService() {
         val state = runCatching { displays?.getDisplay(Display.DEFAULT_DISPLAY)?.state }.getOrNull()
         return !IslandBus.screenOn.value || state == Display.STATE_DOZE || state == Display.STATE_DOZE_SUSPEND || state == Display.STATE_OFF
     }
+
+    private var systemAutomationRunning = false
+
+    /** Автоматика для того, что не отдало кнопку в уведомлении: открыть шторку и нажать «Стоп». */
+    private fun runSystemAutomation(block: suspend () -> Unit) {
+        if (systemAutomationRunning) return
+        systemAutomationRunning = true
+        scope.launch {
+            try {
+                Controls.collapse()
+                block()
+            } finally {
+                systemAutomationRunning = false
+            }
+        }
+    }
+
+    private suspend fun stopRecordingViaShade(c: ChronoInfo) {
+        val opened = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+        } else {
+            performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+        }
+        if (!opened) {
+            automationToast("Не удалось открыть шторку", "Couldn't open the shade")
+            return
+        }
+        val title = c.title.lowercase()
+        val pkg = c.pkg.lowercase()
+        fun isStop(node: android.view.accessibility.AccessibilityNodeInfo): Boolean {
+            val label = node.label()
+            if (stopWords.none { it in label }) return false
+            if (node.clickableTarget() == null) return false
+            val packageMatches = node.packageName?.toString()?.lowercase()?.let { it == pkg || pkg in it } == true
+            return packageMatches || (title.isNotBlank() && title in ancestorLabels(node))
+        }
+        val node = awaitSystemUiNode(predicate = ::isStop) ?: awaitSystemUiNode { node ->
+            stopWords.any { it in node.label() } && node.clickableTarget() != null
+        }
+        if (node == null) {
+            closeSystemUi()
+            automationToast("Не нашёл кнопку «Стоп»", "Couldn't find the Stop button")
+            return
+        }
+        if (!clickNode(node)) {
+            closeSystemUi()
+            automationToast("Не удалось остановить запись", "Couldn't stop the recording")
+            return
+        }
+        delay(450)
+        closeSystemUi()
+    }
+
+    private suspend fun awaitSystemUiNode(
+        timeoutMs: Long = 2_200L,
+        predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean,
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        val end = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < end) {
+            findSystemUiNode(predicate)?.let { return it }
+            delay(100)
+        }
+        return null
+    }
+
+    private fun findSystemUiNode(predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): android.view.accessibility.AccessibilityNodeInfo? {
+        val roots = ArrayList<android.view.accessibility.AccessibilityNodeInfo>(4)
+        rootInActiveWindow?.let {
+            if (it.packageName?.toString() == "com.android.systemui") roots += it
+        }
+        runCatching { windows }.getOrDefault(emptyList()).forEach { w ->
+            if (w.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+            val root = w.root ?: return@forEach
+            if (root.packageName?.toString() == packageName) return@forEach
+            if (root.packageName?.toString() == "com.android.systemui" || w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                roots += root
+            }
+        }
+        return roots.firstNotNullOfOrNull { findNode(it, predicate) }
+    }
+
+    private fun findNode(node: android.view.accessibility.AccessibilityNodeInfo, predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): android.view.accessibility.AccessibilityNodeInfo? {
+        if (predicate(node)) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findNode(child, predicate)?.let { return it }
+        }
+        return null
+    }
+
+    private fun android.view.accessibility.AccessibilityNodeInfo.label(): String =
+        listOfNotNull(text, contentDescription).joinToString(" ").lowercase()
+
+    private fun android.view.accessibility.AccessibilityNodeInfo.clickableTarget(): android.view.accessibility.AccessibilityNodeInfo? {
+        var n: android.view.accessibility.AccessibilityNodeInfo? = this
+        repeat(8) {
+            val node = n ?: return null
+            if (node.isClickable) return node
+            n = node.parent
+        }
+        return null
+    }
+
+    private fun clickNode(node: android.view.accessibility.AccessibilityNodeInfo): Boolean {
+        val target = node.clickableTarget() ?: return false
+        return target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private fun ancestorLabels(node: android.view.accessibility.AccessibilityNodeInfo): String {
+        val labels = StringBuilder()
+        var n = node.parent
+        repeat(8) {
+            val parent = n ?: return labels.toString()
+            labels.append(' ').append(parent.label())
+            n = parent.parent
+        }
+        return labels.toString()
+    }
+
+    private fun closeSystemUi() {
+        val closed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        if (!closed) performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    private fun automationToast(ru: String, en: String) {
+        Toast.makeText(this, tr(ru, en), Toast.LENGTH_SHORT).show()
+    }
+
+    private val stopWords = listOf("стоп", "останов", "заверш", "готов", "stop", "finish", "end", "done")
 
     private fun applySettings(s: IslandSettings, landscape: Boolean, keyguard: Boolean, rotation: Int) {
         IslandType.apply(this, s)
@@ -945,6 +1081,7 @@ class IslandService : AccessibilityService() {
         alarmMonitor?.stop()
         privacyMonitor?.stop()
         privacyMonitor = null
+        Controls.stopRecordingAutomation = {}
         ScreenTone.clear()
         WallpaperTone.stop(this)
         scope.cancel()
